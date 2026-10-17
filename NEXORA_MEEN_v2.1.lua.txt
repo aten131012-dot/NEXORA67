@@ -1,0 +1,1915 @@
+--[[
+    NEXORA × MEEN  |  v2.1
+    ------------------------------------------------------------
+    Pages    : หน้าหลัก / ตัวเรา / ยูทิลิตี้ / ออโต้ / ESP / ผู้เล่น / ฟาร์ม / ร้านค้า / ตั้งค่า
+    Language : ไทย / English  (Settings > ภาษา / Language)
+    Theme    : Black + Crimson Red + Royal Blue + Purple
+
+    FOR THE NEXT DEVELOPER
+      * All visible text lives in the I18N table (th / en). Add a key to both.
+      * Wrap any label with  tl(label(...), "key")  so it follows the language switch.
+      * Add a new category page:
+            1. add its name to the page list  ("Home","Me","Utility","Settings")
+            2. add it to PAGEKEY  and  I18N
+            3. add  navItem("Name", order)  at the marker  "CATEGORY SLOT"
+            4. add a nav icon branch in  navIcon()
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local TeleportService = game:GetService("TeleportService")
+local LP = Players.LocalPlayer
+
+local NAME = "NEXORA × MEEN"
+local VER = "v2.1"
+
+local LINKS = {
+    NEXORA = "https://discord.gg/Qdaj957G4",
+    MEEN = "https://discord.gg/QeUHKdcctt",
+}
+
+------------------------------------------------------------ palette
+local C = {
+    RED = Color3.fromRGB(225, 29, 72),
+    PURPLE = Color3.fromRGB(147, 51, 234),
+    BLUE = Color3.fromRGB(59, 130, 246),
+    BG = Color3.fromRGB(6, 4, 12),
+    PANEL = Color3.fromRGB(14, 9, 24),
+    PANEL2 = Color3.fromRGB(26, 14, 40),
+    TEXT = Color3.fromRGB(242, 236, 252),
+    MUTED = Color3.fromRGB(150, 140, 178),
+    OFF = Color3.fromRGB(52, 40, 72),
+}
+local WHITE = Color3.new(1, 1, 1)
+local CK = ColorSequenceKeypoint.new
+
+------------------------------------------------------------ language
+local LANG = "th"
+local HOOKS = {}
+local I18N = {
+    th = {
+        home = "หน้าหลัก", me = "ตัวเรา", util = "ยูทิลิตี้", settings = "ตั้งค่า",
+        general = "หมวดหมู่ทั่วไป",
+        lux = "Luxury Black Edition", welcome = "ยินดีต้อนรับ, ",
+        players = "ผู้เล่นในเซิร์ฟ", fps = "FPS", ping = "Ping", health = "เลือด",
+        overview = "ภาพรวม FPS", status = "สถานะ", activity = "กิจกรรม",
+        speed = "ความเร็วเดิน", jump = "แรงกระโดด", session = "เวลาที่เล่น",
+        position = "พิกัด", in_server = "ผู้เล่นในเซิร์ฟ", acc_age = "อายุบัญชี", days = "วัน", server = "เซิร์ฟเวอร์",
+        copy_id = "คัดลอก ID", copy_name = "คัดลอกชื่อผู้ใช้", copied = "คัดลอกแล้ว ✓", copy_fail = "อุปกรณ์นี้ไม่รองรับการคัดลอก",
+        copy_link = "คัดลอกลิงก์", run = "ใช้งาน",
+        sec_lang = "ภาษา", sec_ui = "การแสดงผล", sec_comm = "ชุมชน Discord",
+        sec_tools = "เครื่องมือ", sec_char = "ตัวละคร", sec_quick = "คำสั่งด่วน",
+        language = "ภาษา / Language",
+        fx = "เอฟเฟกต์ดาวและอนุภาค", glow = "ขอบเรืองแสง", anim = "แอนิเมชันเปลี่ยนหน้า", hotkey = "ปุ่มลัด RightCtrl ซ่อน/แสดง UI",
+        antiafk = "กันหลุด (Anti-AFK)", fpsboost = "โหมดเพิ่ม FPS", fullbright = "สว่างเต็มที่ (Fullbright)",
+        reset = "รีเซ็ตตัวละคร", rejoin = "เข้าเซิร์ฟใหม่", copyjob = "คัดลอก Job ID", copyplace = "คัดลอก Place ID",
+        nex_desc = "NEXORA ทำฟังก์ชั่น และอื่นๆ อีกมากมาย",
+        meen_desc = "MEEN HUB ได้ออกแบบ UI และโครงสร้างต่างๆ และอื่นๆ อีกมากมาย",
+        ev_load = "โหลดสคริปต์สำเร็จ", ev_join = "%s เข้าเซิร์ฟ", ev_leave = "%s ออกจากเซิร์ฟ",
+        ev_died = "ตัวละครของคุณตาย", ev_spawn = "เกิดใหม่", ev_lang = "เปลี่ยนภาษา: %s",
+        ev_copy = "คัดลอก: %s",
+        feat = "หมวดฟีเจอร์",
+        pg_auto = "ออโต้", pg_esp = "ESP", pg_move = "ผู้เล่น", pg_farm = "ฟาร์ม", pg_shop = "ร้านค้า",
+        a_sec = "ระบบออโต้",
+        a_jump = "กระโดดอัตโนมัติ", a_jump_v = "ช่วงเวลากระโดด",
+        a_click = "คลิกอัตโนมัติ", a_click_v = "ช่วงเวลาคลิก",
+        a_rejoin = "เข้าเกมใหม่อัตโนมัติเมื่อหลุด", a_rejoining = "หลุดจากเกม กำลังเข้าใหม่...",
+        e_sec_pl = "ผู้เล่น", e_players = "ESP ผู้เล่น (ทะลุกำแพง)",
+        e_sec_npc = "บอท / NPC", e_npc = "ESP บอท / NPC",
+        e_sec_opt = "การแสดงผล ESP", e_name = "แสดงชื่อ", e_dist = "แสดงระยะ", e_hp = "แสดงเลือด",
+        e_range = "ระยะสูงสุด", e_color = "เปลี่ยนสีผู้เล่น",
+        c_red = "แดง", c_cyan = "ฟ้า", c_green = "เขียว", c_yellow = "เหลือง", c_white = "ขาว",
+        m_sec_move = "การเคลื่อนที่",
+        m_speed = "ความเร็วเดิน (ล็อกค่า)", m_speed_v = "ค่าความเร็ว",
+        m_jump = "แรงกระโดด (ล็อกค่า)", m_jump_v = "ค่าแรงกระโดด",
+        m_inf = "กระโดดไม่จำกัด",
+        m_fly = "บิน (PC: Space ขึ้น / Ctrl ลง)", m_fly_v = "ความเร็วบิน",
+        m_noclip = "เดินทะลุ",
+        m_grav = "แรงโน้มถ่วงกำหนดเอง", m_grav_v = "ค่าแรงโน้มถ่วง",
+        m_sec_list = "รายชื่อผู้เล่น", m_refresh = "รีเฟรชรายชื่อ", m_stopview = "หยุดดู (คืนกล้อง)",
+        m_none = "ไม่มีผู้เล่นอื่นในเซิร์ฟเวอร์",
+        btn_tp = "วาร์ป", btn_view = "ดู",
+        m_viewing = "กำลังดู: %s", m_tped = "วาร์ปไปหา: %s",
+        f_sec_survive = "เอาตัวรอด",
+        f_afk = "แพลตฟอร์ม AFK (ยืนสูงเหนือแมพ)", f_afk_h = "ความสูงแพลตฟอร์ม",
+        f_avoid = "หลบบอท (วาร์ปหนีเมื่อเข้าใกล้)", f_avoid_r = "ระยะอันตราย",
+        f_sec_collect = "เก็บของ",
+        f_collect = "เก็บของอัตโนมัติ", f_collect_v = "ช่วงเวลาเก็บ", f_collect_r = "ระยะเก็บ",
+        f_note = "ชื่อไอเทมเป็นการเดา (ticket, coin, token, cash, orb) อาจไม่ตรงกับเกม ถ้าไม่เก็บของให้แก้ COLLECT_PATTERNS ที่หัวส่วนฟาร์มในสคริปต์",
+        f_noroot = "ตัวละครยังไม่พร้อม",
+        s_sec = "ร้านค้า", s_unlock = "ปลดล็อกของทั้งหมดในร้านค้า", s_found = "ปลดล็อกแล้ว (องค์ประกอบ)",
+        s_done = "ปลดล็อกร้านค้าแล้ว: %d องค์ประกอบ",
+        s_none = "ยังไม่พบหน้าร้านค้า เปิดร้านค้าในเกมแล้วจะปลดล็อกให้อัตโนมัติ",
+        s_note = "ปลดล็อกฝั่งหน้าจอ (Client): ซ่อนป้ายล็อกและเปิดปุ่มที่ถูกล็อกในหน้าร้านค้า ต้องเปิดร้านค้าในเกมก่อน ส่วนการได้ของจริงเซิร์ฟเวอร์เป็นคนตัดสิน ของที่ต้องซื้อหรือเลเวลไม่ถึงอาจใช้งานไม่ได้ ถ้าจำนวนเป็น 0 ให้แก้ SHOP_PATTERNS ให้ตรงชื่อหน้าร้านค้าของเกม",
+    },
+    en = {
+        home = "Home", me = "Profile", util = "Utilities", settings = "Settings",
+        general = "GENERAL",
+        lux = "Luxury Black Edition", welcome = "Welcome, ",
+        players = "Players", fps = "FPS", ping = "Ping", health = "Health",
+        overview = "FPS Overview", status = "Status", activity = "Activity",
+        speed = "Walk speed", jump = "Jump power", session = "Session",
+        position = "Position", in_server = "Players in server", acc_age = "Account age", days = "days", server = "Server",
+        copy_id = "Copy ID", copy_name = "Copy username", copied = "Copied ✓", copy_fail = "Clipboard not supported here",
+        copy_link = "Copy link", run = "Run",
+        sec_lang = "LANGUAGE", sec_ui = "DISPLAY", sec_comm = "DISCORD COMMUNITY",
+        sec_tools = "TOOLS", sec_char = "CHARACTER", sec_quick = "QUICK ACTIONS",
+        language = "ภาษา / Language",
+        fx = "Stars & particles", glow = "Glowing border", anim = "Page transitions", hotkey = "RightCtrl hotkey to hide/show UI",
+        antiafk = "Anti-AFK", fpsboost = "FPS Boost", fullbright = "Fullbright",
+        reset = "Reset character", rejoin = "Rejoin server", copyjob = "Copy Job ID", copyplace = "Copy Place ID",
+        nex_desc = "NEXORA builds the functions and so much more.",
+        meen_desc = "MEEN HUB designed the UI, the structure and so much more.",
+        ev_load = "Script loaded", ev_join = "%s joined", ev_leave = "%s left",
+        ev_died = "You died", ev_spawn = "Respawned", ev_lang = "Language: %s",
+        ev_copy = "Copied: %s",
+        feat = "FEATURES",
+        pg_auto = "Auto", pg_esp = "ESP", pg_move = "Players", pg_farm = "Farm", pg_shop = "Shop",
+        a_sec = "AUTOMATION",
+        a_jump = "Auto Jump", a_jump_v = "Jump interval",
+        a_click = "Auto Click", a_click_v = "Click interval",
+        a_rejoin = "Auto Rejoin on disconnect", a_rejoining = "Disconnected, rejoining...",
+        e_sec_pl = "PLAYERS", e_players = "ESP Players (through walls)",
+        e_sec_npc = "BOTS / NPC", e_npc = "ESP Bots / NPC",
+        e_sec_opt = "ESP DISPLAY", e_name = "Show name", e_dist = "Show distance", e_hp = "Show health",
+        e_range = "Max distance", e_color = "Change player color",
+        c_red = "Red", c_cyan = "Cyan", c_green = "Green", c_yellow = "Yellow", c_white = "White",
+        m_sec_move = "MOVEMENT",
+        m_speed = "WalkSpeed (locked)", m_speed_v = "Speed value",
+        m_jump = "JumpPower (locked)", m_jump_v = "Jump value",
+        m_inf = "Infinite jump",
+        m_fly = "Fly (PC: Space up / Ctrl down)", m_fly_v = "Fly speed",
+        m_noclip = "Noclip",
+        m_grav = "Custom gravity", m_grav_v = "Gravity value",
+        m_sec_list = "PLAYER LIST", m_refresh = "Refresh list", m_stopview = "Stop viewing",
+        m_none = "No other players in this server",
+        btn_tp = "TP", btn_view = "View",
+        m_viewing = "Viewing: %s", m_tped = "Teleported to: %s",
+        f_sec_survive = "SURVIVE",
+        f_afk = "AFK platform (high above the map)", f_afk_h = "Platform height",
+        f_avoid = "Bot avoidance (jump away when close)", f_avoid_r = "Danger distance",
+        f_sec_collect = "COLLECT",
+        f_collect = "Auto collect", f_collect_v = "Collect interval", f_collect_r = "Collect range",
+        f_note = "Item names are guesses (ticket, coin, token, cash, orb) and may not match the game. If nothing is collected, edit COLLECT_PATTERNS at the top of the Farm section.",
+        f_noroot = "Character not ready",
+        s_sec = "SHOP", s_unlock = "Unlock everything in the shop", s_found = "Unlocked (elements)",
+        s_done = "Shop unlocked: %d elements",
+        s_none = "Shop UI not found yet. Open the in-game shop and it will unlock automatically.",
+        s_note = "Client-side unlock: hides lock badges and enables locked buttons in the shop UI. Open the in-game shop first. The server decides what you actually get, so items that need a purchase or a level may still not work. If the count stays 0, edit SHOP_PATTERNS to match the game's shop UI name.",
+    },
+}
+local function T(k)
+    return (I18N[LANG] and I18N[LANG][k]) or I18N.th[k] or k
+end
+local function reg(fn)
+    table.insert(HOOKS, fn)
+    pcall(fn)
+end
+local function tl(lbl, key)
+    reg(function() lbl.Text = T(key) end)
+    return lbl
+end
+local function applyLang()
+    for _, f in ipairs(HOOKS) do pcall(f) end
+end
+
+------------------------------------------------------------ helpers
+local function new(cls, props, kids)
+    local o = Instance.new(cls)
+    for k, v in pairs(props or {}) do o[k] = v end
+    for _, c in ipairs(kids or {}) do c.Parent = o end
+    return o
+end
+local function tw(o, t, p, style, dir)
+    local tn = TweenService:Create(o, TweenInfo.new(t, style or Enum.EasingStyle.Quint, dir or Enum.EasingDirection.Out), p)
+    tn:Play()
+    return tn
+end
+local function corner(r) return new("UICorner", {CornerRadius = UDim.new(0, r)}) end
+local function stroke(col, th, tr)
+    return new("UIStroke", {Color = col or C.PURPLE, Thickness = th or 1, Transparency = tr or 0.75, ApplyStrokeMode = Enum.ApplyStrokeMode.Border})
+end
+local function pad(n)
+    return new("UIPadding", {PaddingTop = UDim.new(0, n), PaddingBottom = UDim.new(0, n), PaddingLeft = UDim.new(0, n), PaddingRight = UDim.new(0, n)})
+end
+local function grad(a, b, rot)
+    return new("UIGradient", {Rotation = rot or 0, Color = ColorSequence.new({CK(0, a), CK(1, b)})})
+end
+local function tri(a, b, c, rot)
+    return new("UIGradient", {Rotation = rot or 0, Color = ColorSequence.new({CK(0, a), CK(0.5, b), CK(1, c)})})
+end
+local function hover(b, over, out)
+    b.MouseEnter:Connect(function() tw(b, 0.15, over) end)
+    b.MouseLeave:Connect(function() tw(b, 0.2, out) end)
+end
+local function press(b)
+    local s = new("UIScale", {Parent = b})
+    b.MouseButton1Down:Connect(function() tw(s, 0.08, {Scale = 0.95}) end)
+    local function up() tw(s, 0.25, {Scale = 1}, Enum.EasingStyle.Back) end
+    b.MouseButton1Up:Connect(up)
+    b.MouseLeave:Connect(up)
+end
+local function popIn(o, delay)
+    local s = o:FindFirstChild("PopScale") or new("UIScale", {Name = "PopScale", Parent = o})
+    s.Scale = 0.94
+    task.delay(delay or 0, function()
+        if s.Parent then tw(s, 0.4, {Scale = 1}, Enum.EasingStyle.Back) end
+    end)
+end
+local function label(parent, props)
+    local d = {BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 14, TextColor3 = C.TEXT, TextXAlignment = Enum.TextXAlignment.Left, Parent = parent}
+    for k, v in pairs(props) do d[k] = v end
+    return new("TextLabel", d)
+end
+local function button(parent, props, kids)
+    local d = {AutoButtonColor = false, Text = "", BorderSizePixel = 0, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = C.TEXT, Parent = parent}
+    for k, v in pairs(props) do d[k] = v end
+    local b = new("TextButton", d, kids)
+    press(b)
+    return b
+end
+local function glass(parent, props, r)
+    local d = {BackgroundColor3 = C.PANEL2, BackgroundTransparency = 0.35, BorderSizePixel = 0, Parent = parent}
+    for k, v in pairs(props or {}) do d[k] = v end
+    local f = new("Frame", d)
+    corner(r or 14).Parent = f
+    stroke(C.PURPLE, 1, 0.78).Parent = f
+    new("UIGradient", {Rotation = 90, Color = ColorSequence.new({CK(0, WHITE), CK(1, Color3.fromRGB(185, 165, 210))}), Parent = f})
+    return f
+end
+local function bar(parent, w, h, x, y, rot, col)
+    return new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(w, h), Position = UDim2.new(0.5, x, 0.5, y), Rotation = rot or 0,
+        BackgroundColor3 = col or C.TEXT, BorderSizePixel = 0, Parent = parent}, {corner(2)})
+end
+local function copyText(s)
+    local fn = (typeof(setclipboard) == "function" and setclipboard)
+        or (typeof(toclipboard) == "function" and toclipboard)
+        or (typeof(Clipboard) == "table" and Clipboard.set)
+    if not fn then return false end
+    return (pcall(fn, s))
+end
+local function fmtTime(s)
+    s = math.max(0, math.floor(s))
+    return string.format("%02d:%02d:%02d", math.floor(s / 3600), math.floor(s / 60) % 60, s % 60)
+end
+local function nowStr(fmt)
+    local ok, s = pcall(os.date, fmt)
+    return ok and s or "--"
+end
+
+------------------------------------------------------------ gui root
+do
+    local hosts = {}
+    pcall(function() table.insert(hosts, game:GetService("CoreGui")) end)
+    pcall(function() if gethui then table.insert(hosts, gethui()) end end)
+    pcall(function() table.insert(hosts, LP:WaitForChild("PlayerGui", 3)) end)
+    for _, h in ipairs(hosts) do
+        pcall(function()
+            local o = h:FindFirstChild("NexoraMeen")
+            if o then o:Destroy() end
+        end)
+    end
+end
+local gui = new("ScreenGui", {Name = "NexoraMeen", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 999, ZIndexBehavior = Enum.ZIndexBehavior.Sibling})
+pcall(function() gui.Parent = (gethui and gethui()) or game:GetService("CoreGui") end)
+if not gui.Parent then gui.Parent = LP:WaitForChild("PlayerGui") end
+
+local conns = {}
+local function bind(sig, fn)
+    local c = sig:Connect(fn)
+    table.insert(conns, c)
+    return c
+end
+gui.Destroying:Connect(function()
+    for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
+end)
+
+local S = {anim = true, hotkey = true, boost = false, full = false, ws = nil, jp = nil}
+
+-- spinning tri-colour stroke
+local function spin(parent, th, speed)
+    local st = new("UIStroke", {Color = WHITE, Thickness = th, Parent = parent})
+    local g = new("UIGradient", {Color = ColorSequence.new({CK(0, C.RED), CK(0.33, C.PURPLE), CK(0.66, C.BLUE), CK(1, C.RED)}), Parent = st})
+    bind(RunService.Heartbeat, function(dt) g.Rotation = (g.Rotation + dt * speed) % 360 end)
+    return st
+end
+
+------------------------------------------------------------ layout (auto-fits any screen)
+local DW, DH = 800, 430
+local SIDEW = 156
+local MX, MY = 12 + SIDEW + 12, 12
+local MW = DW - MX - 12
+local BODY_Y = MY + 44
+local BODY_H = DH - 12 - BODY_Y
+
+local holder = new("Frame", {Name = "Holder", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(DW, DH), BackgroundTransparency = 1, Parent = gui})
+local fit = new("UIScale", {Parent = holder})
+local function refit()
+    local cam = workspace.CurrentCamera
+    local v = (cam and cam.ViewportSize) or Vector2.new(1000, 600)
+    fit.Scale = math.clamp(math.min((v.X - 12) / DW, (v.Y - 12) / DH), 0.25, 1)
+end
+refit()
+pcall(function() bind(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"), refit) end)
+
+local function makeDraggable(handle, target)
+    local dragging, start, startPos
+    handle.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging, start, startPos = true, i.Position, target.Position
+            target:SetAttribute("moved", false)
+            i.Changed:Connect(function()
+                if i.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    bind(UIS.InputChanged, function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            local d = i.Position - start
+            if d.Magnitude > 5 then target:SetAttribute("moved", true) end
+            target.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        end
+    end)
+end
+
+------------------------------------------------------------ window + royal background
+local main = new("Frame", {Name = "Main", Size = UDim2.fromScale(1, 1), BackgroundColor3 = C.BG, BackgroundTransparency = 0.03, BorderSizePixel = 0,
+    ClipsDescendants = true, Parent = holder}, {corner(20)})
+local mscale = new("UIScale", {Scale = 0.85, Parent = main})
+
+-- rotating tri-colour border
+local ring = stroke(C.RED, 1.8, 0.1)
+ring.Parent = main
+local ringG = new("UIGradient", {Color = ColorSequence.new({CK(0, C.RED), CK(0.33, C.PURPLE), CK(0.66, C.BLUE), CK(1, C.RED)}), Parent = ring})
+bind(RunService.Heartbeat, function(dt) ringG.Rotation = (ringG.Rotation + dt * 40) % 360 end)
+
+local sky = new("Frame", {Name = "Sky", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), ZIndex = 1, Parent = main})
+local function glow(px, py, size, col, tr)
+    return new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(px, py), Size = UDim2.fromOffset(size, size),
+        BackgroundColor3 = col, BackgroundTransparency = tr, BorderSizePixel = 0, Parent = sky}, {corner(size // 2)})
+end
+local g1 = glow(0.12, 0.1, 360, C.RED, 0.88)
+local g2 = glow(0.92, 0.95, 340, C.BLUE, 0.88)
+local g3 = glow(0.6, 0.45, 300, C.PURPLE, 0.93)
+for _, g in ipairs({g1, g2, g3}) do
+    TweenService:Create(g, TweenInfo.new(4 + math.random() * 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundTransparency = g.BackgroundTransparency + 0.05}):Play()
+end
+for i = 1, 3 do
+    new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.2 + i * 0.25, 0.5), Size = UDim2.fromOffset(520, 46), Rotation = -35 + i * 12,
+        BackgroundColor3 = WHITE, BackgroundTransparency = 0.975, BorderSizePixel = 0, Parent = sky})
+end
+
+local fxList = {}
+local starCols = {C.RED, C.BLUE, C.PURPLE, WHITE}
+for i = 1, 26 do -- twinkling stars
+    local s = new("Frame", {Size = UDim2.fromOffset(math.random(2, 3), math.random(2, 3)), Position = UDim2.fromScale(math.random(), math.random()),
+        BackgroundColor3 = starCols[(i % 4) + 1], BackgroundTransparency = 0.7, BorderSizePixel = 0, Parent = sky}, {corner(2)})
+    TweenService:Create(s, TweenInfo.new(1.4 + math.random() * 2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true, math.random() * 2), {BackgroundTransparency = 0.1}):Play()
+    table.insert(fxList, s)
+end
+for i = 1, 20 do -- floating particles rising
+    local sz = math.random(2, 4)
+    local x = math.random()
+    local p = new("Frame", {Size = UDim2.fromOffset(sz, sz), Position = UDim2.fromScale(x, 1.05), BackgroundColor3 = starCols[(i % 4) + 1],
+        BackgroundTransparency = 0.45, BorderSizePixel = 0, Parent = sky}, {corner(4)})
+    TweenService:Create(p, TweenInfo.new(7 + math.random() * 8, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1, false, math.random() * 6), {Position = UDim2.fromScale(x, -0.05)}):Play()
+    table.insert(fxList, p)
+end
+
+------------------------------------------------------------ toast
+local toastF = new("Frame", {AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, 50), Size = UDim2.fromOffset(270, 34),
+    BackgroundColor3 = C.PANEL2, BorderSizePixel = 0, ZIndex = 80, Parent = main}, {corner(17)})
+local toastStroke = stroke(C.PURPLE, 1.5, 0.2)
+toastStroke.Parent = toastF
+local toastLbl = label(toastF, {Size = UDim2.fromScale(1, 1), Text = "", Font = Enum.Font.GothamBold, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 81})
+local toastTok = 0
+local function toast(text, col)
+    toastTok = toastTok + 1
+    local my = toastTok
+    toastLbl.Text = text
+    toastStroke.Color = col or C.PURPLE
+    tw(toastF, 0.35, {Position = UDim2.new(0.5, 0, 1, -14)}, Enum.EasingStyle.Back)
+    task.delay(2, function()
+        if my == toastTok and toastF.Parent then tw(toastF, 0.3, {Position = UDim2.new(0.5, 0, 1, 50)}) end
+    end)
+end
+
+------------------------------------------------------------ top bar
+local top = new("Frame", {Name = "Top", Position = UDim2.fromOffset(MX, MY), Size = UDim2.fromOffset(MW, 36), BackgroundTransparency = 1, ZIndex = 5, Parent = main})
+local titleLbl = label(top, {Position = UDim2.fromOffset(2, 0), Size = UDim2.fromOffset(200, 36), Text = "หน้าหลัก", Font = Enum.Font.GothamBold, TextSize = 19, ZIndex = 6})
+
+local closeBtn = button(top, {Position = UDim2.fromOffset(MW - 32, 4), Size = UDim2.fromOffset(28, 28), BackgroundColor3 = C.PANEL2, BackgroundTransparency = 0.3, ZIndex = 6}, {corner(9)})
+bar(closeBtn, 12, 2, 0, 0, 45, C.TEXT)
+bar(closeBtn, 12, 2, 0, 0, -45, C.TEXT)
+local minBtn = button(top, {Position = UDim2.fromOffset(MW - 64, 4), Size = UDim2.fromOffset(28, 28), BackgroundColor3 = C.PANEL2, BackgroundTransparency = 0.3, ZIndex = 6}, {corner(9)})
+bar(minBtn, 12, 2, 0, 3, 0, C.TEXT)
+hover(closeBtn, {BackgroundColor3 = C.RED, BackgroundTransparency = 0.1}, {BackgroundColor3 = C.PANEL2, BackgroundTransparency = 0.3})
+hover(minBtn, {BackgroundColor3 = C.PURPLE, BackgroundTransparency = 0.2}, {BackgroundColor3 = C.PANEL2, BackgroundTransparency = 0.3})
+
+local chip = glass(top, {Position = UDim2.fromOffset(MW - 64 - 8 - 150, 5), Size = UDim2.fromOffset(150, 26), ZIndex = 6}, 13)
+local chipDot = new("Frame", {Position = UDim2.fromOffset(11, 9), Size = UDim2.fromOffset(8, 8), BackgroundColor3 = C.RED, BorderSizePixel = 0, ZIndex = 7, Parent = chip}, {corner(4)})
+TweenService:Create(chipDot, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundColor3 = C.BLUE}):Play()
+label(chip, {Position = UDim2.fromOffset(26, 0), Size = UDim2.new(1, -32, 1, 0), Text = "PREMIUM  " .. VER, Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = C.TEXT, ZIndex = 7})
+makeDraggable(top, holder)
+
+------------------------------------------------------------ body + pages
+local body = new("Frame", {Name = "Body", Position = UDim2.fromOffset(MX, BODY_Y), Size = UDim2.fromOffset(MW, BODY_H), BackgroundTransparency = 1, ZIndex = 2, Parent = main})
+local pages = {}
+for _, n in ipairs({"Home", "Me", "Utility", "Auto", "ESP", "Move", "Farm", "Shop", "Settings"}) do
+    pages[n] = new("Frame", {Name = n, Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = (n == "Home"), Parent = body})
+end
+local PAGEKEY = {Home = "home", Me = "me", Utility = "util", Auto = "pg_auto", ESP = "pg_esp", Move = "pg_move", Farm = "pg_farm", Shop = "pg_shop", Settings = "settings"}
+
+------------------------------------------------------------ activity log (data first, drawn later)
+local LOG = {}
+local renderLog = function() end
+local function logEv(key, arg, col)
+    table.insert(LOG, 1, {key = key, arg = arg, col = col or C.PURPLE, t = nowStr("%H:%M:%S")})
+    while #LOG > 12 do table.remove(LOG) end
+    renderLog()
+end
+
+------------------------------------------------------------ sidebar
+local side = glass(main, {Name = "Side", Position = UDim2.fromOffset(12, 12), Size = UDim2.fromOffset(SIDEW, DH - 24), ZIndex = 2}, 16)
+
+-- emblem (drawn, no asset id)
+local emblem = new("Frame", {Position = UDim2.fromOffset(12, 12), Size = UDim2.fromOffset(32, 32), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 3, Parent = side}, {corner(10), tri(C.RED, C.PURPLE, C.BLUE, 45)})
+label(emblem, {Size = UDim2.fromScale(1, 1), Text = "N", Font = Enum.Font.GothamBlack, TextSize = 18, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 4})
+label(side, {Position = UDim2.fromOffset(52, 10), Size = UDim2.new(1, -56, 0, 18), Text = NAME, Font = Enum.Font.GothamBlack, TextSize = 11, ZIndex = 3})
+label(side, {Position = UDim2.fromOffset(52, 28), Size = UDim2.new(1, -56, 0, 12), Text = "PREMIUM  " .. VER, TextSize = 9, TextColor3 = C.MUTED, ZIndex = 3})
+local logoHit = new("Frame", {Size = UDim2.new(1, 0, 0, 52), BackgroundTransparency = 1, ZIndex = 3, Parent = side})
+makeDraggable(logoHit, holder)
+new("Frame", {Position = UDim2.fromOffset(12, 54), Size = UDim2.new(1, -24, 0, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 3, Parent = side}, {tri(C.RED, C.PURPLE, C.BLUE, 0)})
+
+-- nav icons drawn with frames
+local function navIcon(parent, kind)
+    local box = new("Frame", {Position = UDim2.fromOffset(10, 8), Size = UDim2.fromOffset(14, 14), BackgroundTransparency = 1, ZIndex = 4, Parent = parent})
+    local parts, rings = {}, {}
+    local function sq(x, y, w, h, r)
+        local f = new("Frame", {Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(w, h), BackgroundColor3 = C.MUTED, BorderSizePixel = 0, ZIndex = 4, Parent = box}, {corner(r or 2)})
+        table.insert(parts, f)
+        return f
+    end
+    local function ringF(x, y, d, th)
+        local f = new("Frame", {Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset(d, d), BackgroundTransparency = 1, ZIndex = 4, Parent = box}, {new("UICorner", {CornerRadius = UDim.new(0.5, 0)})})
+        local st = new("UIStroke", {Color = C.MUTED, Thickness = th, Parent = f})
+        table.insert(rings, st)
+        return f
+    end
+    if kind == "Home" then
+        sq(2, 6, 10, 8, 2)
+        local rf = sq(2.5, 1, 9, 9, 1)
+        rf.Rotation = 45
+    elseif kind == "Me" then
+        ringF(4, 0, 6, 2)
+        sq(1, 8, 12, 6, 3)
+    elseif kind == "Utility" then
+        sq(0, 0, 6, 6, 2) sq(8, 0, 6, 6, 2) sq(0, 8, 6, 6, 2) sq(8, 8, 6, 6, 2)
+    elseif kind == "Auto" then
+        ringF(1, 1, 12, 2)
+        sq(5, 5, 4, 4, 2)
+    elseif kind == "ESP" then
+        sq(0, 5, 14, 4, 2)
+        ringF(4, 3, 6, 2)
+    elseif kind == "Move" then
+        ringF(4, 0, 6, 2)
+        sq(6, 6, 2, 8, 1)
+        sq(1, 7, 12, 2, 1)
+    elseif kind == "Farm" then
+        sq(6, 5, 2, 9, 1)
+        sq(0, 1, 6, 5, 3)
+        sq(8, 0, 6, 5, 3)
+    elseif kind == "Shop" then
+        sq(1, 5, 12, 9, 2)
+        ringF(3, 0, 8, 2)
+    else -- Settings (gear)
+        ringF(3, 3, 8, 2)
+        sq(6, 0, 2, 3, 1) sq(6, 11, 2, 3, 1) sq(0, 6, 3, 2, 1) sq(11, 6, 3, 2, 1)
+        local t1 = sq(1.6, 1.6, 2, 3, 1) t1.Rotation = -45
+        local t2 = sq(10.4, 1.6, 2, 3, 1) t2.Rotation = 45
+        local t3 = sq(1.6, 9.4, 2, 3, 1) t3.Rotation = 45
+        local t4 = sq(10.4, 9.4, 2, 3, 1) t4.Rotation = -45
+    end
+    return function(col)
+        for _, p in ipairs(parts) do p.BackgroundColor3 = col end
+        for _, r in ipairs(rings) do r.Color = col end
+    end
+end
+
+local navList = new("ScrollingFrame", {Position = UDim2.fromOffset(0, 62), Size = UDim2.new(1, 0, 1, -62 - 60), BackgroundTransparency = 1, BorderSizePixel = 0,
+    ScrollBarThickness = 0, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 3, Parent = side},
+    {new("UIListLayout", {Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder}),
+     new("UIPadding", {PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 4)})})
+
+local function header(key, order)
+    tl(label(navList, {Size = UDim2.new(1, 0, 0, 22), Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = C.MUTED,
+        TextYAlignment = Enum.TextYAlignment.Bottom, LayoutOrder = order, ZIndex = 3}), key)
+end
+
+local navBtns, navStroke, navIco, navTxt, navInd = {}, {}, {}, {}, {}
+local current = "Home"
+local function setPage(n)
+    current = n
+    for k, p in pairs(pages) do p.Visible = (k == n) end
+    if S.anim then
+        local i = 0
+        for _, c in ipairs(pages[n]:GetChildren()) do
+            if c:IsA("GuiObject") then
+                i = i + 1
+                popIn(c, (i - 1) * 0.045)
+            end
+        end
+    end
+    for k, b in pairs(navBtns) do
+        local on = (k == n)
+        tw(b, 0.2, {BackgroundTransparency = on and 0.7 or 1})
+        tw(navStroke[k], 0.2, {Transparency = on and 0.6 or 1})
+        tw(navTxt[k], 0.2, {TextColor3 = on and C.TEXT or C.MUTED})
+        tw(navInd[k], 0.2, {BackgroundTransparency = on and 0 or 1})
+        navIco[k](on and C.RED or C.MUTED)
+    end
+    titleLbl.Text = T(PAGEKEY[n])
+end
+reg(function() titleLbl.Text = T(PAGEKEY[current]) end)
+
+local function navItem(key, order)
+    local b = button(navList, {Size = UDim2.new(1, 0, 0, 30), BackgroundColor3 = C.PURPLE, BackgroundTransparency = 1, LayoutOrder = order, ZIndex = 3}, {corner(10)})
+    navStroke[key] = stroke(C.RED, 1, 1)
+    navStroke[key].Parent = b
+    navInd[key] = new("Frame", {AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 0, 0.5, 0), Size = UDim2.fromOffset(3, 16), BackgroundColor3 = WHITE,
+        BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 5, Parent = b}, {corner(2), grad(C.RED, C.BLUE, 90)})
+    navIco[key] = navIcon(b, key)
+    navTxt[key] = tl(label(b, {Position = UDim2.fromOffset(34, 0), Size = UDim2.new(1, -40, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, TextColor3 = C.MUTED, ZIndex = 4}), PAGEKEY[key])
+    navBtns[key] = b
+    b.MouseButton1Click:Connect(function() setPage(key) end)
+end
+
+navItem("Home", 1)
+header("general", 10)
+-- CATEGORY SLOT: add new category buttons here with LayoutOrder 11 to 19
+navItem("Me", 11)
+navItem("Utility", 12)
+header("feat", 13)
+navItem("Auto", 14)
+navItem("ESP", 15)
+navItem("Move", 16)
+navItem("Farm", 17)
+navItem("Shop", 18)
+header("settings", 20)
+navItem("Settings", 21)
+
+-- user card
+local me = new("Frame", {AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 8, 1, -8), Size = UDim2.new(1, -16, 0, 44), BackgroundColor3 = C.PANEL, BackgroundTransparency = 0.25,
+    BorderSizePixel = 0, ZIndex = 3, Parent = side}, {corner(12), stroke(C.PURPLE, 1, 0.8)})
+local av = new("Frame", {Position = UDim2.fromOffset(8, 7), Size = UDim2.fromOffset(30, 30), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 4, Parent = me}, {corner(15), tri(C.RED, C.PURPLE, C.BLUE, 60)})
+label(av, {Size = UDim2.fromScale(1, 1), Text = string.upper(string.sub(LP.Name, 1, 1)), Font = Enum.Font.GothamBold, TextSize = 14, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 5})
+new("ImageLabel", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(LP.UserId) .. "&w=150&h=150", ZIndex = 6, Parent = av}, {corner(15)})
+label(me, {Position = UDim2.fromOffset(45, 6), Size = UDim2.new(1, -52, 0, 16), Text = LP.DisplayName, Font = Enum.Font.GothamMedium, TextSize = 12, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4})
+label(me, {Position = UDim2.fromOffset(45, 23), Size = UDim2.new(1, -52, 0, 12), Text = "@" .. LP.Name, TextSize = 10, TextColor3 = C.MUTED, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4})
+
+------------------------------------------------------------ HOME (live dashboard)
+local home = pages.Home
+
+-- hero banner
+local hero = glass(home, {Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(MW, 84), ClipsDescendants = true}, 16)
+new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.08, 0.2), Size = UDim2.fromOffset(230, 230), BackgroundColor3 = C.RED, BackgroundTransparency = 0.84, BorderSizePixel = 0, ZIndex = 1, Parent = hero}, {corner(115)})
+new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.96, 0.9), Size = UDim2.fromOffset(210, 210), BackgroundColor3 = C.BLUE, BackgroundTransparency = 0.86, BorderSizePixel = 0, ZIndex = 1, Parent = hero}, {corner(105)})
+new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.6, 0.1), Size = UDim2.fromOffset(180, 180), BackgroundColor3 = C.PURPLE, BackgroundTransparency = 0.9, BorderSizePixel = 0, ZIndex = 1, Parent = hero}, {corner(90)})
+local sweep = new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(-0.15, 0, 0.5, 0), Size = UDim2.fromOffset(60, 220), Rotation = 20,
+    BackgroundColor3 = WHITE, BackgroundTransparency = 0.93, BorderSizePixel = 0, ZIndex = 2, Parent = hero})
+task.spawn(function()
+    while sweep.Parent do
+        sweep.Position = UDim2.new(-0.15, 0, 0.5, 0)
+        local t = tw(sweep, 2.6, {Position = UDim2.new(1.15, 0, 0.5, 0)}, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+        t.Completed:Wait()
+        task.wait(3)
+    end
+end)
+
+-- orb with spinning tri-colour ring
+local orbRing = new("Frame", {Position = UDim2.fromOffset(13, 9), Size = UDim2.fromOffset(66, 66), BackgroundTransparency = 1, ZIndex = 3, Parent = hero}, {corner(33)})
+spin(orbRing, 2.5, 140)
+local orb = new("Frame", {Position = UDim2.fromOffset(18, 14), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = C.BG, BorderSizePixel = 0, ZIndex = 3, Parent = hero}, {corner(28), grad(C.PANEL2, C.BG, 90)})
+local orbTxt = label(orb, {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1), Text = "N×M", Font = Enum.Font.GothamBlack, TextSize = 16,
+    TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 4})
+TweenService:Create(orbTxt, TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {TextColor3 = C.RED}):Play()
+
+label(hero, {Position = UDim2.fromOffset(92, 9), Size = UDim2.fromOffset(330, 26), Text = NAME, Font = Enum.Font.GothamBlack, TextSize = 20, ZIndex = 3})
+local heroLine = label(hero, {Position = UDim2.fromOffset(92, 37), Size = UDim2.fromOffset(330, 16), Text = "", TextSize = 12, TextColor3 = C.BLUE, ZIndex = 3})
+task.spawn(function()
+    local k = 0
+    while hero.Parent do
+        local phrases = {T("lux"), "Crimson  ·  Royal Blue  ·  Purple", T("welcome") .. LP.DisplayName}
+        k = k % #phrases + 1
+        local p = phrases[k]
+        local n = utf8.len(p) or #p
+        for i = 1, n do
+            if not hero.Parent then return end
+            heroLine.Text = p:sub(1, (utf8.offset(p, i + 1) or (#p + 1)) - 1) .. "|"
+            task.wait(0.045)
+        end
+        heroLine.Text = p
+        task.wait(2.2)
+        for i = n, 0, -1 do
+            if not hero.Parent then return end
+            heroLine.Text = p:sub(1, (utf8.offset(p, i + 1) or (#p + 1)) - 1)
+            task.wait(0.012)
+        end
+    end
+end)
+local function miniChip(x, w, col, txt)
+    local f = new("Frame", {Position = UDim2.fromOffset(x, 60), Size = UDim2.fromOffset(w, 16), BackgroundColor3 = col, BackgroundTransparency = 0.82, BorderSizePixel = 0, ZIndex = 3, Parent = hero},
+        {corner(8), stroke(col, 1, 0.55)})
+    label(f, {Size = UDim2.fromScale(1, 1), Text = txt, Font = Enum.Font.GothamBold, TextSize = 9, TextColor3 = col, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 4})
+end
+miniChip(92, 70, C.RED, "NEXORA")
+miniChip(168, 60, C.PURPLE, "MEEN")
+miniChip(234, 60, C.BLUE, VER)
+
+-- live clock (right side of hero)
+local heroClock = label(hero, {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 12), Size = UDim2.fromOffset(160, 28), Text = "--:--:--",
+    Font = Enum.Font.GothamBlack, TextSize = 22, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 3})
+tri(C.RED, C.PURPLE, C.BLUE, 0).Parent = heroClock
+local heroSub = label(hero, {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -16, 0, 44), Size = UDim2.fromOffset(170, 14), Text = "",
+    TextSize = 10, TextColor3 = C.MUTED, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 3})
+
+-- stat cards (live)
+local function statCard(x, key, accent, init)
+    local f = glass(home, {Position = UDim2.fromOffset(x, 94), Size = UDim2.fromOffset(196, 54)})
+    local ic = new("Frame", {Position = UDim2.new(1, -38, 0, 14), Size = UDim2.fromOffset(26, 26), BackgroundColor3 = accent, BackgroundTransparency = 0.8, BorderSizePixel = 0, Parent = f}, {corner(8)})
+    local dot = new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(8, 8), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = ic}, {corner(4)})
+    TweenService:Create(dot, TweenInfo.new(1.1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Size = UDim2.fromOffset(12, 12)}):Play()
+    tl(label(f, {Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -58, 0, 12), TextSize = 10, TextColor3 = C.MUTED, Font = Enum.Font.GothamMedium}), key)
+    local big = label(f, {Position = UDim2.fromOffset(14, 22), Size = UDim2.new(1, -58, 0, 24), Text = init, Font = Enum.Font.GothamBold, TextSize = 19, TextTruncate = Enum.TextTruncate.AtEnd})
+    new("Frame", {AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, 0), Size = UDim2.new(1, -28, 0, 2), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = f}, {grad(accent, C.BG, 0)})
+    return big
+end
+local stPlayers = statCard(0, "players", C.RED, "0")
+local stFps = statCard(206, "fps", C.PURPLE, "0")
+local stPing = statCard(412, "ping", C.BLUE, "0 ms")
+
+-- FPS chart card (live bars)
+local CY = 158
+local CH = BODY_H - CY
+local pulseCard = glass(home, {Position = UDim2.fromOffset(0, CY), Size = UDim2.fromOffset(240, CH)})
+tl(label(pulseCard, {Position = UDim2.fromOffset(14, 0), Size = UDim2.fromOffset(140, 34), Font = Enum.Font.GothamBold, TextSize = 13}), "overview")
+local fpsTop = label(pulseCard, {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 0), Size = UDim2.fromOffset(70, 34), Text = "0", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = C.RED, TextXAlignment = Enum.TextXAlignment.Right})
+new("Frame", {Position = UDim2.fromOffset(0, 34), Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = WHITE, BackgroundTransparency = 0.93, BorderSizePixel = 0, Parent = pulseCard})
+local PH_W, PH_H = 240 - 36, CH - 34 - 36
+local pulseBox = new("Frame", {Position = UDim2.fromOffset(18, 42), Size = UDim2.fromOffset(PH_W, PH_H), BackgroundTransparency = 1, ClipsDescendants = true, Parent = pulseCard})
+local N_BARS = 30
+local hist, bars = {}, {}
+do
+    for g = 0, 3 do
+        new("Frame", {Position = UDim2.fromOffset(0, math.floor(g * (PH_H - 1) / 3)), Size = UDim2.fromOffset(PH_W, 1), BackgroundColor3 = WHITE, BackgroundTransparency = 0.94, BorderSizePixel = 0, Parent = pulseBox})
+    end
+    local stepX = PH_W / N_BARS
+    for i = 1, N_BARS do
+        hist[i] = 0
+        bars[i] = new("Frame", {AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromOffset((i - 1) * stepX + 1, PH_H), Size = UDim2.fromOffset(math.max(stepX - 2, 2), 2),
+            BackgroundColor3 = C.RED, BorderSizePixel = 0, Parent = pulseBox}, {corner(2)})
+    end
+    local scan = new("Frame", {Position = UDim2.fromOffset(-20, 0), Size = UDim2.fromOffset(18, PH_H), BackgroundColor3 = WHITE, BackgroundTransparency = 0.8, BorderSizePixel = 0, ZIndex = 5, Parent = pulseBox},
+        {new("UIGradient", {Transparency = NumberSequence.new({NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, 0), NumberSequenceKeypoint.new(1, 1)})})})
+    TweenService:Create(scan, TweenInfo.new(2.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, false, 0.5), {Position = UDim2.fromOffset(PH_W + 2, 0)}):Play()
+end
+local chartInfo = label(pulseCard, {AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -6), Size = UDim2.new(1, -28, 0, 14), Text = "AVG 0  ·  MIN 0  ·  MAX 0", TextSize = 10, TextColor3 = C.MUTED})
+local function drawChart()
+    local mx, mn, sum = 60, 9999, 0
+    for _, v in ipairs(hist) do
+        if v > mx then mx = v end
+        if v < mn then mn = v end
+        sum = sum + v
+    end
+    local stepX = PH_W / N_BARS
+    for i, v in ipairs(hist) do
+        local h = math.max(2, (v / mx) * (PH_H - 4))
+        tw(bars[i], 0.35, {Size = UDim2.fromOffset(math.max(stepX - 2, 2), h), BackgroundColor3 = C.RED:Lerp(C.BLUE, math.clamp(v / 60, 0, 1))})
+    end
+    chartInfo.Text = string.format("AVG %d  ·  MIN %d  ·  MAX %d", math.floor(sum / N_BARS + 0.5), math.floor(mn), math.floor(mx == 60 and math.max(table.unpack(hist)) or mx))
+end
+
+-- status ring (live health)
+local donutCard = glass(home, {Position = UDim2.fromOffset(250, CY), Size = UDim2.fromOffset(150, CH)})
+tl(label(donutCard, {Position = UDim2.fromOffset(12, 8), Size = UDim2.new(1, -24, 0, 16), Font = Enum.Font.GothamBold, TextSize = 12}), "status")
+local RING_N = 44
+local ringFill = RING_N
+local ringBox = new("Frame", {Position = UDim2.fromOffset(35, 32), Size = UDim2.fromOffset(80, 80), BackgroundTransparency = 1, Parent = donutCard})
+local ringBars = {}
+do
+    local r = 80 / 2 - 5
+    for i = 1, RING_N do
+        local a = (i - 1) / RING_N * math.pi * 2 - math.pi / 2
+        ringBars[i] = new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(math.ceil(2 * math.pi * r / RING_N) + 1, 8),
+            Position = UDim2.new(0.5, math.cos(a) * r, 0.5, math.sin(a) * r), Rotation = math.deg(a) + 90, BackgroundColor3 = C.RED, BorderSizePixel = 0, Parent = ringBox}, {corner(2)})
+    end
+end
+local ringPct = label(ringBox, {Size = UDim2.fromScale(1, 0.6), Position = UDim2.fromScale(0, 0.12), Text = "0%", Font = Enum.Font.GothamBold, TextSize = 17, TextXAlignment = Enum.TextXAlignment.Center})
+tl(label(ringBox, {Size = UDim2.fromScale(1, 0.3), Position = UDim2.fromScale(0, 0.56), Font = Enum.Font.GothamMedium, TextSize = 8, TextColor3 = C.MUTED, TextXAlignment = Enum.TextXAlignment.Center}), "health")
+local legendVals = {}
+for i, lg in ipairs({{"health", C.RED}, {"fps", C.PURPLE}, {"ping", C.BLUE}}) do
+    local y = 126 + (i - 1) * 18
+    new("Frame", {Position = UDim2.fromOffset(14, y + 4), Size = UDim2.fromOffset(6, 6), BackgroundColor3 = lg[2], BorderSizePixel = 0, Parent = donutCard}, {corner(3)})
+    tl(label(donutCard, {Position = UDim2.fromOffset(26, y), Size = UDim2.new(0.5, -26, 0, 14), TextSize = 11, TextColor3 = C.MUTED}), lg[1])
+    legendVals[i] = label(donutCard, {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, y), Size = UDim2.new(0.4, 0, 0, 14), Text = "-", Font = Enum.Font.GothamBold, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Right})
+end
+task.spawn(function() -- rotating comet highlight on the ring
+    local head = 0
+    while donutCard.Parent do
+        if home.Visible and holder.Visible then
+            head = head % RING_N + 1
+            local FILL = ringFill
+            for i, b in ipairs(ringBars) do
+                if i <= FILL then
+                    local base = C.RED:Lerp(C.PURPLE, math.min((i - 1) / (RING_N * 0.5), 1)):Lerp(C.BLUE, math.max((i - 1 - RING_N * 0.5) / (RING_N * 0.5), 0))
+                    local dist = (head - i) % RING_N
+                    local boost = dist < 8 and (1 - dist / 8) or 0
+                    b.BackgroundColor3 = base:Lerp(WHITE, boost * 0.55)
+                    b.BackgroundTransparency = 0
+                else
+                    b.BackgroundColor3 = C.MUTED
+                    b.BackgroundTransparency = 0.85
+                end
+            end
+        end
+        task.wait(0.07)
+    end
+end)
+
+-- activity card (real events)
+local logCard = glass(home, {Position = UDim2.fromOffset(410, CY), Size = UDim2.fromOffset(MW - 410, CH), ClipsDescendants = true})
+tl(label(logCard, {Position = UDim2.fromOffset(12, 7), Size = UDim2.fromOffset(90, 16), Font = Enum.Font.GothamBold, TextSize = 12}), "activity")
+local feed = new("Frame", {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 8), Size = UDim2.fromOffset(40, 15), BackgroundColor3 = C.RED, BackgroundTransparency = 0.8, BorderSizePixel = 0, Parent = logCard}, {corner(8)})
+label(feed, {Size = UDim2.fromScale(1, 1), Text = "LIVE", Font = Enum.Font.GothamBold, TextSize = 8, TextColor3 = C.RED, TextXAlignment = Enum.TextXAlignment.Center})
+TweenService:Create(feed, TweenInfo.new(0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {BackgroundTransparency = 0.6}):Play()
+local logRows = {}
+local nRows = math.max(1, math.floor((CH - 40) / 26))
+for i = 1, nRows do
+    local y = 32 + (i - 1) * 26
+    local row = new("Frame", {Position = UDim2.fromOffset(0, y), Size = UDim2.new(1, 0, 0, 24), BackgroundTransparency = 1, Visible = false, Parent = logCard})
+    local icon = new("Frame", {Position = UDim2.fromOffset(12, 4), Size = UDim2.fromOffset(16, 16), BackgroundColor3 = C.RED, BackgroundTransparency = 0.7, BorderSizePixel = 0, Parent = row}, {corner(5)})
+    local mainL = label(row, {Position = UDim2.fromOffset(36, 0), Size = UDim2.new(1, -44, 0, 13), TextSize = 10, Font = Enum.Font.GothamMedium, TextTruncate = Enum.TextTruncate.AtEnd})
+    local subL = label(row, {Position = UDim2.fromOffset(36, 12), Size = UDim2.new(1, -44, 0, 11), TextSize = 9, TextColor3 = C.MUTED})
+    logRows[i] = {row = row, icon = icon, main = mainL, sub = subL}
+end
+renderLog = function()
+    for i, r in ipairs(logRows) do
+        local e = LOG[i]
+        r.row.Visible = e ~= nil
+        if e then
+            local txt = T(e.key)
+            if e.arg then txt = string.format(txt, tostring(e.arg)) end
+            r.main.Text = txt
+            r.sub.Text = e.t
+            r.icon.BackgroundColor3 = e.col
+            if i == 1 then
+                r.main.TextTransparency = 1
+                tw(r.main, 0.4, {TextTransparency = 0})
+            end
+        end
+    end
+end
+reg(function() renderLog() end)
+
+------------------------------------------------------------ ME (profile)
+local meP = pages.Me
+local meCard = glass(meP, {Position = UDim2.fromOffset(0, 0), Size = UDim2.fromOffset(210, BODY_H)}, 16)
+
+local avFrame = new("Frame", {AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 16), Size = UDim2.fromOffset(150, 150), BackgroundColor3 = C.PANEL, BorderSizePixel = 0, Parent = meCard},
+    {corner(24), grad(C.PANEL2, C.BG, 90)})
+spin(avFrame, 2.5, 120)
+label(avFrame, {Size = UDim2.fromScale(1, 1), Text = string.upper(string.sub(LP.Name, 1, 1)), Font = Enum.Font.GothamBlack, TextSize = 60, TextXAlignment = Enum.TextXAlignment.Center})
+new("ImageLabel", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ScaleType = Enum.ScaleType.Crop, ZIndex = 2,
+    Image = "rbxthumb://type=AvatarBust&id=" .. tostring(LP.UserId) .. "&w=420&h=420", Parent = avFrame}, {corner(24)})
+label(meCard, {Position = UDim2.fromOffset(8, 174), Size = UDim2.new(1, -16, 0, 24), Text = LP.DisplayName, Font = Enum.Font.GothamBlack, TextSize = 17, TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd})
+label(meCard, {Position = UDim2.fromOffset(8, 198), Size = UDim2.new(1, -16, 0, 16), Text = "@" .. LP.Name, TextSize = 12, TextColor3 = C.MUTED, TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd})
+new("Frame", {Position = UDim2.fromOffset(16, 224), Size = UDim2.new(1, -32, 0, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0}, {tri(C.RED, C.PURPLE, C.BLUE, 0)}).Parent = meCard
+
+local function copyBtn(parent, y, key, text)
+    local b = button(parent, {Position = UDim2.fromOffset(16, y), Size = UDim2.new(1, -32, 0, 32), BackgroundColor3 = WHITE}, {corner(10), tri(C.RED, C.PURPLE, C.BLUE, 0)})
+    tl(label(b, {Size = UDim2.fromScale(1, 1), Font = Enum.Font.GothamBold, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 2}), key)
+    b.MouseButton1Click:Connect(function()
+        if copyText(text) then
+            toast(T("copied"), C.BLUE)
+            logEv("ev_copy", text, C.BLUE)
+        else
+            toast(T("copy_fail"), C.RED)
+        end
+    end)
+    return b
+end
+copyBtn(meCard, 234, "copy_id", tostring(LP.UserId))
+copyBtn(meCard, 274, "copy_name", LP.Name)
+do
+    local f = new("Frame", {AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 318), Size = UDim2.fromOffset(110, 18), BackgroundColor3 = C.PURPLE, BackgroundTransparency = 0.82, BorderSizePixel = 0, Parent = meCard},
+        {corner(9), stroke(C.PURPLE, 1, 0.5)})
+    label(f, {Size = UDim2.fromScale(1, 1), Text = "ID " .. tostring(LP.UserId), Font = Enum.Font.GothamBold, TextSize = 9, TextColor3 = C.PURPLE, TextXAlignment = Enum.TextXAlignment.Center})
+end
+
+-- health card
+local RX, RW = 222, MW - 222
+local hpCard = glass(meP, {Position = UDim2.fromOffset(RX, 0), Size = UDim2.fromOffset(RW, 76)})
+tl(label(hpCard, {Position = UDim2.fromOffset(14, 8), Size = UDim2.fromOffset(160, 24), Font = Enum.Font.GothamBold, TextSize = 13}), "health")
+local hpText = label(hpCard, {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 8), Size = UDim2.fromOffset(150, 24), Text = "0 / 0", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = C.RED, TextXAlignment = Enum.TextXAlignment.Right})
+local hpTrack = new("Frame", {Position = UDim2.fromOffset(14, 44), Size = UDim2.new(1, -28, 0, 14), BackgroundColor3 = C.OFF, BorderSizePixel = 0, Parent = hpCard}, {corner(7)})
+local hpFill = new("Frame", {Size = UDim2.fromScale(0, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = hpTrack}, {corner(7), tri(C.RED, C.PURPLE, C.BLUE, 0)})
+
+-- tiles
+local function tile(x, y, key, accent)
+    local f = glass(meP, {Position = UDim2.fromOffset(x, y), Size = UDim2.fromOffset((RW - 8) / 2, 62)})
+    tl(label(f, {Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -40, 0, 12), TextSize = 10, TextColor3 = C.MUTED, Font = Enum.Font.GothamMedium}), key)
+    local v = label(f, {Position = UDim2.fromOffset(14, 24), Size = UDim2.new(1, -28, 0, 28), Text = "-", Font = Enum.Font.GothamBold, TextSize = 20, TextTruncate = Enum.TextTruncate.AtEnd})
+    new("Frame", {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(8, 8), BackgroundColor3 = accent, BorderSizePixel = 0, Parent = f}, {corner(4)})
+    new("Frame", {AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, 0), Size = UDim2.new(1, -28, 0, 2), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = f}, {grad(accent, C.BG, 0)})
+    return v
+end
+local TW_ = (RW - 8) / 2
+local tFps = tile(RX, 86, "fps", C.RED)
+local tPing = tile(RX + TW_ + 8, 86, "ping", C.PURPLE)
+local tSpeed = tile(RX, 156, "speed", C.BLUE)
+local tSess = tile(RX + TW_ + 8, 156, "session", C.RED)
+
+-- info card
+local infoCard = glass(meP, {Position = UDim2.fromOffset(RX, 226), Size = UDim2.fromOffset(RW, BODY_H - 226)})
+local infoVals = {}
+for i, k in ipairs({"position", "in_server", "acc_age", "server"}) do
+    local y = 6 + (i - 1) * 32
+    tl(label(infoCard, {Position = UDim2.fromOffset(14, y), Size = UDim2.fromOffset(120, 32), TextSize = 12, TextColor3 = C.MUTED, Font = Enum.Font.GothamMedium}), k)
+    infoVals[k] = label(infoCard, {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, y), Size = UDim2.new(1, -150, 0, 32), Text = "-",
+        TextXAlignment = Enum.TextXAlignment.Right, TextSize = 12, Font = Enum.Font.GothamBold, TextTruncate = Enum.TextTruncate.AtEnd})
+    if i < 4 then
+        new("Frame", {Position = UDim2.fromOffset(14, y + 32), Size = UDim2.new(1, -28, 0, 1), BackgroundColor3 = WHITE, BackgroundTransparency = 0.94, BorderSizePixel = 0, Parent = infoCard})
+    end
+end
+
+------------------------------------------------------------ list-page builders (Utility + Settings)
+local function listPage(page, titleKey)
+    local card = glass(page, {Size = UDim2.fromScale(1, 1)})
+    tl(label(card, {Position = UDim2.fromOffset(16, 0), Size = UDim2.fromOffset(300, 38), Font = Enum.Font.GothamBold, TextSize = 14}), titleKey)
+    new("Frame", {Position = UDim2.fromOffset(0, 38), Size = UDim2.new(1, 0, 0, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = card}, {tri(C.RED, C.PURPLE, C.BLUE, 0)})
+    return new("ScrollingFrame", {Position = UDim2.fromOffset(0, 40), Size = UDim2.new(1, 0, 1, -40), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3,
+        ScrollBarImageColor3 = C.PURPLE, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = card},
+        {pad(12), new("UIListLayout", {Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder})})
+end
+local function section(list, key, lo)
+    tl(label(list, {Size = UDim2.new(1, 0, 0, 16), Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = C.MUTED, LayoutOrder = lo}), key)
+end
+local function row(list, lo, h)
+    return new("Frame", {Size = UDim2.new(1, 0, 0, h or 46), BackgroundColor3 = C.PANEL, BackgroundTransparency = 0.3, BorderSizePixel = 0, LayoutOrder = lo, Parent = list},
+        {corner(12), stroke(C.PURPLE, 1, 0.82)})
+end
+local OFFS = {}
+gui.Destroying:Connect(function()
+    for _, f in ipairs(OFFS) do pcall(f) end
+end)
+local function switch(list, key, default, lo, onChange)
+    local f = row(list, lo)
+    tl(label(f, {Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -90, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, TextTruncate = Enum.TextTruncate.AtEnd}), key)
+    local on = default
+    local sw = button(f, {AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(46, 26), BackgroundColor3 = on and C.PURPLE or C.OFF}, {corner(13)})
+    local knob = new("Frame", {AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, on and 23 or 3, 0.5, 0), Size = UDim2.fromOffset(20, 20), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = sw}, {corner(10)})
+    sw.MouseButton1Click:Connect(function()
+        on = not on
+        tw(knob, 0.25, {Position = UDim2.new(0, on and 23 or 3, 0.5, 0)}, Enum.EasingStyle.Back)
+        tw(sw, 0.2, {BackgroundColor3 = on and C.PURPLE or C.OFF})
+        if onChange then onChange(on) end
+    end)
+    table.insert(OFFS, function()
+        if on and onChange then
+            on = false
+            pcall(onChange, false)
+        end
+    end)
+end
+local function actionRow(list, key, lo, fn)
+    local f = row(list, lo)
+    tl(label(f, {Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -130, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13, TextTruncate = Enum.TextTruncate.AtEnd}), key)
+    local b = button(f, {AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(86, 28), BackgroundColor3 = WHITE}, {corner(10), tri(C.RED, C.PURPLE, C.BLUE, 0)})
+    tl(label(b, {Size = UDim2.fromScale(1, 1), Font = Enum.Font.GothamBold, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 2}), "run")
+    b.MouseButton1Click:Connect(fn)
+end
+local function slider(list, key, mn, mx, def, lo, onChange, step, suffix)
+    local f = row(list, lo, 58)
+    tl(label(f, {Position = UDim2.fromOffset(14, 6), Size = UDim2.new(1, -100, 0, 20), Font = Enum.Font.GothamMedium, TextSize = 13}), key)
+    local val = label(f, {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 6), Size = UDim2.fromOffset(70, 20), Text = tostring(def),
+        TextXAlignment = Enum.TextXAlignment.Right, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = C.RED})
+    local track = new("Frame", {Position = UDim2.new(0, 14, 0, 40), Size = UDim2.new(1, -28, 0, 6), BackgroundColor3 = C.OFF, BorderSizePixel = 0, Parent = f}, {corner(3)})
+    local fill = new("Frame", {Size = UDim2.fromScale(0, 1), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = track}, {corner(3), tri(C.RED, C.PURPLE, C.BLUE, 0)})
+    local knob = new("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(14, 14), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 3, Parent = track},
+        {corner(7), stroke(C.PURPLE, 2, 0.1)})
+    local hit = new("TextButton", {Text = "", BackgroundTransparency = 1, Position = UDim2.new(0, -8, 0.5, -14), Size = UDim2.new(1, 16, 0, 28), Parent = track})
+    local function setRatio(r, fire)
+        r = math.clamp(r, 0, 1)
+        local v = mn + (mx - mn) * r
+        if step then v = math.floor(v / step + 0.5) * step else v = math.floor(v + 0.5) end
+        v = tonumber(string.format("%.2f", math.clamp(v, mn, mx)))
+        fill.Size = UDim2.fromScale(r, 1)
+        knob.Position = UDim2.fromScale(r, 0.5)
+        val.Text = tostring(v) .. (suffix or "")
+        if fire and onChange then onChange(v) end
+    end
+    setRatio((def - mn) / (mx - mn), false)
+    local dragging = false
+    local function fromInput(i)
+        setRatio((i.Position.X - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), true)
+    end
+    hit.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            list.ScrollingEnabled = false
+            fromInput(i)
+        end
+    end)
+    bind(UIS.InputChanged, function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then fromInput(i) end
+    end)
+    bind(UIS.InputEnded, function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
+            dragging = false
+            list.ScrollingEnabled = true
+        end
+    end)
+end
+
+------------------------------------------------------------ UTILITY
+local ORIG = {}
+pcall(function()
+    ORIG.GlobalShadows = Lighting.GlobalShadows
+    ORIG.Brightness = Lighting.Brightness
+    ORIG.ClockTime = Lighting.ClockTime
+    ORIG.FogEnd = Lighting.FogEnd
+    ORIG.Ambient = Lighting.Ambient
+    ORIG.OutdoorAmbient = Lighting.OutdoorAmbient
+end)
+local ORIGQ
+pcall(function() ORIGQ = settings().Rendering.QualityLevel end)
+local fullApplied = false
+local function applyLighting()
+    pcall(function()
+        Lighting.GlobalShadows = (ORIG.GlobalShadows == true) and not (S.boost or S.full)
+    end)
+    pcall(function()
+        if S.full then
+            fullApplied = true
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+            Lighting.FogEnd = 100000
+            Lighting.Ambient = Color3.fromRGB(178, 178, 178)
+            Lighting.OutdoorAmbient = Color3.fromRGB(178, 178, 178)
+        elseif fullApplied then
+            fullApplied = false
+            Lighting.Brightness = ORIG.Brightness
+            Lighting.ClockTime = ORIG.ClockTime
+            Lighting.FogEnd = ORIG.FogEnd
+            Lighting.Ambient = ORIG.Ambient
+            Lighting.OutdoorAmbient = ORIG.OutdoorAmbient
+        end
+    end)
+    pcall(function()
+        if S.boost then
+            settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+        elseif ORIGQ then
+            settings().Rendering.QualityLevel = ORIGQ
+        end
+    end)
+end
+gui.Destroying:Connect(function()
+    S.boost, S.full = false, false
+    applyLighting()
+end)
+
+local function getHum()
+    local ch = LP.Character
+    return ch and ch:FindFirstChildOfClass("Humanoid"), ch and ch:FindFirstChild("HumanoidRootPart")
+end
+local function applyHum()
+    local hum = getHum()
+    if not hum then return end
+    pcall(function()
+        if S.ws then hum.WalkSpeed = S.ws end
+        if S.jp then
+            hum.UseJumpPower = true
+            hum.JumpPower = S.jp
+        end
+    end)
+end
+
+local utilList = listPage(pages.Utility, "util")
+section(utilList, "sec_tools", 1)
+local afkConn
+switch(utilList, "antiafk", false, 2, function(v)
+    if afkConn then afkConn:Disconnect() afkConn = nil end
+    if v then
+        afkConn = LP.Idled:Connect(function()
+            pcall(function()
+                local vu = game:GetService("VirtualUser")
+                vu:CaptureController()
+                vu:ClickButton2(Vector2.new())
+            end)
+        end)
+        table.insert(conns, afkConn)
+    end
+end)
+switch(utilList, "fpsboost", false, 3, function(v) S.boost = v applyLighting() end)
+switch(utilList, "fullbright", false, 4, function(v) S.full = v applyLighting() end)
+section(utilList, "sec_char", 5)
+local initWS, initJP = 16, 50
+do
+    local hum = getHum()
+    if hum then
+        pcall(function() initWS = math.clamp(math.floor(hum.WalkSpeed), 1, 200) end)
+        pcall(function() initJP = math.clamp(math.floor(hum.JumpPower), 1, 300) end)
+    end
+end
+slider(utilList, "speed", 1, 200, initWS, 6, function(v) S.ws = v applyHum() end)
+slider(utilList, "jump", 1, 300, initJP, 7, function(v) S.jp = v applyHum() end)
+section(utilList, "sec_quick", 8)
+actionRow(utilList, "reset", 9, function()
+    local hum = getHum()
+    if hum then hum.Health = 0 end
+end)
+actionRow(utilList, "rejoin", 10, function()
+    pcall(function()
+        if #Players:GetPlayers() <= 1 then
+            TeleportService:Teleport(game.PlaceId, LP)
+        else
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
+        end
+    end)
+end)
+actionRow(utilList, "copyjob", 11, function()
+    if copyText(tostring(game.JobId)) then toast(T("copied"), C.BLUE) else toast(T("copy_fail"), C.RED) end
+end)
+actionRow(utilList, "copyplace", 12, function()
+    if copyText(tostring(game.PlaceId)) then toast(T("copied"), C.BLUE) else toast(T("copy_fail"), C.RED) end
+end)
+
+------------------------------------------------------------ FEATURES (Auto / ESP / Players / Farm / Shop)
+local Workspace = workspace
+local VirtualUser = game:GetService("VirtualUser")
+local GuiService = game:GetService("GuiService")
+
+local function hum1()
+    local h = getHum()
+    return h
+end
+local function rootP()
+    local _, r = getHum()
+    return r
+end
+
+-- keyed connections (turned off together when the GUI is destroyed)
+local KB = {}
+local function kbind(key, sig, fn)
+    if KB[key] then KB[key]:Disconnect() end
+    KB[key] = sig:Connect(fn)
+end
+local function kunbind(key)
+    if KB[key] then
+        KB[key]:Disconnect()
+        KB[key] = nil
+    end
+end
+gui.Destroying:Connect(function()
+    for k in pairs(KB) do kunbind(k) end
+end)
+
+local function noteRow(list, key, lo, h)
+    local f = row(list, lo, h or 70)
+    tl(label(f, {Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 1, -16), TextSize = 11, TextColor3 = C.MUTED,
+        TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top}), key)
+end
+local function infoRow(list, key, lo)
+    local f = row(list, lo, 42)
+    tl(label(f, {Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -120, 1, 0), Font = Enum.Font.GothamMedium, TextSize = 13}), key)
+    return label(f, {AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 0), Size = UDim2.fromOffset(100, 42), Text = "0",
+        Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = C.RED, TextXAlignment = Enum.TextXAlignment.Right})
+end
+
+------------------------------------------------------------ AUTO
+local AU = {jump = 1.5, click = 0.5}
+local autoList = listPage(pages.Auto, "pg_auto")
+local jumpT, clickT, rejoining = 0, 0, false
+section(autoList, "a_sec", 1)
+switch(autoList, "a_jump", false, 2, function(on)
+    if on then
+        jumpT = 0
+        kbind("AU_JUMP", RunService.Heartbeat, function(dt)
+            jumpT = jumpT + dt
+            if jumpT >= AU.jump then
+                jumpT = 0
+                local h = hum1()
+                if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+            end
+        end)
+    else
+        kunbind("AU_JUMP")
+    end
+end)
+slider(autoList, "a_jump_v", 0.5, 5, AU.jump, 3, function(v) AU.jump = v end, 0.1, "s")
+switch(autoList, "a_click", false, 4, function(on)
+    if on then
+        clickT = 0
+        kbind("AU_CLICK", RunService.Heartbeat, function(dt)
+            clickT = clickT + dt
+            if clickT >= AU.click then
+                clickT = 0
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton1(Vector2.new(0, 0))
+                end)
+            end
+        end)
+    else
+        kunbind("AU_CLICK")
+    end
+end)
+slider(autoList, "a_click_v", 0.05, 2, AU.click, 5, function(v) AU.click = v end, 0.05, "s")
+switch(autoList, "a_rejoin", false, 6, function(on)
+    if on then
+        kbind("AU_REJOIN", GuiService.ErrorMessageChanged, function()
+            if rejoining then return end
+            rejoining = true
+            toast(T("a_rejoining"), C.RED)
+            task.delay(2, function()
+                pcall(function() TeleportService:Teleport(game.PlaceId, LP) end)
+                task.delay(8, function() rejoining = false end)
+            end)
+        end)
+    else
+        kunbind("AU_REJOIN")
+    end
+end)
+
+------------------------------------------------------------ ESP
+local ESP = {Players = false, NPC = false, Name = true, Dist = true, HP = true, Range = 1500, ColorIdx = 1}
+local ESP_COLORS = {
+    {"c_red", Color3.fromRGB(225, 70, 70)}, {"c_cyan", Color3.fromRGB(60, 200, 235)},
+    {"c_green", Color3.fromRGB(80, 210, 120)}, {"c_yellow", Color3.fromRGB(240, 205, 70)},
+    {"c_white", Color3.fromRGB(255, 255, 255)},
+}
+local NPC_COLOR = Color3.fromRGB(240, 150, 50)
+local EObjs, ENpcs = {}, {}
+
+local function espClear(model)
+    local o = EObjs[model]
+    if o then
+        if o.hl then o.hl:Destroy() end
+        if o.bb then o.bb:Destroy() end
+        EObjs[model] = nil
+    end
+end
+local function espBuild(model, name, isNpc)
+    espClear(model)
+    local head = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
+    if not head then return end
+    local hl = new("Highlight", {Name = "NX_ESP", Adornee = model, FillColor = C.RED, OutlineColor = WHITE, FillTransparency = 0.6,
+        OutlineTransparency = 0, DepthMode = Enum.HighlightDepthMode.AlwaysOnTop, Parent = model})
+    local bb = new("BillboardGui", {Name = "NX_TAG", Adornee = head, AlwaysOnTop = true, Size = UDim2.fromOffset(190, 24),
+        StudsOffset = Vector3.new(0, 2.8, 0), Parent = head})
+    local lbl = new("TextLabel", {BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Font = Enum.Font.GothamBold, TextSize = 13,
+        TextColor3 = WHITE, TextStrokeTransparency = 0.5, Text = name, Parent = bb})
+    EObjs[model] = {hl = hl, bb = bb, lbl = lbl, head = head, name = name, isNpc = isNpc, hum = model:FindFirstChildOfClass("Humanoid")}
+end
+local function espScanNpc(inst)
+    if inst:IsA("Humanoid") then
+        local m = inst.Parent
+        if m and m:IsA("Model") and m ~= LP.Character and not Players:GetPlayerFromCharacter(m) then
+            ENpcs[m] = true
+        end
+    end
+end
+local function espRefresh()
+    for model, o in pairs(EObjs) do
+        if not model.Parent or not o.hl.Parent or (o.isNpc and not ESP.NPC) or (not o.isNpc and not ESP.Players) then
+            espClear(model)
+        end
+    end
+    if ESP.Players then
+        for _, plr in ipairs(Players:GetPlayers()) do
+            local ch = plr.Character
+            if plr ~= LP and ch and not EObjs[ch] then espBuild(ch, plr.DisplayName, false) end
+        end
+    end
+    if ESP.NPC then
+        for m in pairs(ENpcs) do
+            if not m.Parent then
+                ENpcs[m] = nil
+            elseif not EObjs[m] then
+                espBuild(m, m.Name, true)
+            end
+        end
+    end
+end
+local function espLabels()
+    local root = rootP()
+    for _, o in pairs(EObjs) do
+        local d = (root and o.head and o.head.Parent) and (root.Position - o.head.Position).Magnitude or 0
+        local inRange = d <= ESP.Range
+        o.hl.Enabled, o.bb.Enabled = inRange, inRange
+        o.hl.FillColor = o.isNpc and NPC_COLOR or ESP_COLORS[ESP.ColorIdx][2]
+        if inRange then
+            local parts = {}
+            if ESP.Name then parts[#parts + 1] = o.name end
+            if ESP.HP and o.hum then parts[#parts + 1] = "HP " .. math.floor(o.hum.Health) end
+            if ESP.Dist then parts[#parts + 1] = math.floor(d) .. "m" end
+            o.lbl.Text = table.concat(parts, "  |  ")
+            o.lbl.Visible = #parts > 0
+        end
+    end
+end
+local espT1, espT2 = 1, 1
+local function espSync()
+    if ESP.Players or ESP.NPC then
+        espT1, espT2 = 1, 1
+        kbind("ESP_LOOP", RunService.Heartbeat, function(dt)
+            espT1 = espT1 + dt
+            espT2 = espT2 + dt
+            if espT1 >= 1 then espT1 = 0 espRefresh() end
+            if espT2 >= 0.2 then espT2 = 0 espLabels() end
+        end)
+    else
+        kunbind("ESP_LOOP")
+        for m in pairs(EObjs) do espClear(m) end
+    end
+end
+
+local espList = listPage(pages.ESP, "pg_esp")
+section(espList, "e_sec_pl", 1)
+switch(espList, "e_players", false, 2, function(on)
+    ESP.Players = on
+    espSync()
+end)
+section(espList, "e_sec_npc", 3)
+switch(espList, "e_npc", false, 4, function(on)
+    ESP.NPC = on
+    if on then
+        for _, d in ipairs(Workspace:GetDescendants()) do espScanNpc(d) end
+        kbind("ESP_NPC_ADD", Workspace.DescendantAdded, espScanNpc)
+    else
+        kunbind("ESP_NPC_ADD")
+        table.clear(ENpcs)
+    end
+    espSync()
+end)
+section(espList, "e_sec_opt", 5)
+switch(espList, "e_name", true, 6, function(v) ESP.Name = v end)
+switch(espList, "e_dist", true, 7, function(v) ESP.Dist = v end)
+switch(espList, "e_hp", true, 8, function(v) ESP.HP = v end)
+slider(espList, "e_range", 100, 3000, ESP.Range, 9, function(v) ESP.Range = v end, 50, "m")
+actionRow(espList, "e_color", 10, function()
+    ESP.ColorIdx = ESP.ColorIdx % #ESP_COLORS + 1
+    toast(T("e_color") .. ": " .. T(ESP_COLORS[ESP.ColorIdx][1]), ESP_COLORS[ESP.ColorIdx][2])
+end)
+
+------------------------------------------------------------ PLAYERS (movement + player list)
+local MV = {speed = 32, jump = 80, fly = 60, grav = 120}
+local MORIG = {}
+
+local function mvWalkSpeed(on)
+    if on then
+        local h = hum1()
+        if h and MORIG.Speed == nil then MORIG.Speed = h.WalkSpeed end
+        kbind("MV_SPEED", RunService.Heartbeat, function()
+            local hm = hum1()
+            if hm then hm.WalkSpeed = MV.speed end
+        end)
+    else
+        kunbind("MV_SPEED")
+        local h = hum1()
+        if h and MORIG.Speed then h.WalkSpeed = MORIG.Speed end
+        MORIG.Speed = nil
+    end
+end
+local function mvJumpPower(on)
+    if on then
+        local h = hum1()
+        if h and MORIG.Jump == nil then MORIG.Jump, MORIG.UseJP = h.JumpPower, h.UseJumpPower end
+        kbind("MV_JUMP", RunService.Heartbeat, function()
+            local hm = hum1()
+            if hm then
+                hm.UseJumpPower = true
+                hm.JumpPower = MV.jump
+            end
+        end)
+    else
+        kunbind("MV_JUMP")
+        local h = hum1()
+        if h and MORIG.Jump ~= nil then
+            h.UseJumpPower = MORIG.UseJP
+            h.JumpPower = MORIG.Jump
+        end
+        MORIG.Jump, MORIG.UseJP = nil, nil
+    end
+end
+local function mvInfJump(on)
+    if on then
+        kbind("MV_INF", UIS.JumpRequest, function()
+            local h = hum1()
+            if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end)
+    else
+        kunbind("MV_INF")
+    end
+end
+local function mvNoclip(on)
+    if on then
+        kbind("MV_NOCLIP", RunService.Stepped, function()
+            local c = LP.Character
+            if not c then return end
+            for _, p in ipairs(c:GetDescendants()) do
+                if p:IsA("BasePart") and p.CanCollide then p.CanCollide = false end
+            end
+        end)
+    else
+        kunbind("MV_NOCLIP")
+    end
+end
+local FlyO = {}
+local function clearFly()
+    if FlyO.BV then FlyO.BV:Destroy() FlyO.BV = nil end
+    if FlyO.BG then FlyO.BG:Destroy() FlyO.BG = nil end
+end
+local function mvFly(on)
+    if on then
+        kbind("MV_FLY", RunService.Heartbeat, function()
+            local h, root, cam = hum1(), rootP(), Workspace.CurrentCamera
+            if not h or not root or not cam then return end
+            if not FlyO.BV or FlyO.BV.Parent ~= root then
+                clearFly()
+                FlyO.BV = new("BodyVelocity", {MaxForce = Vector3.new(1e9, 1e9, 1e9), Velocity = Vector3.zero, Parent = root})
+                FlyO.BG = new("BodyGyro", {MaxTorque = Vector3.new(1e9, 1e9, 1e9), P = 9e4, CFrame = root.CFrame, Parent = root})
+            end
+            h.PlatformStand = true
+            local vel, move = Vector3.zero, h.MoveDirection
+            if move.Magnitude > 0 then
+                local cf = cam.CFrame
+                local rel = cf:VectorToObjectSpace(move)
+                local dir = cf.RightVector * rel.X - cf.LookVector * rel.Z
+                if dir.Magnitude > 0 then vel = dir.Unit * MV.fly end
+            end
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then vel = vel + Vector3.new(0, MV.fly, 0) end
+            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then vel = vel - Vector3.new(0, MV.fly, 0) end
+            FlyO.BV.Velocity = vel
+            local look = cam.CFrame.LookVector
+            local flat = Vector3.new(look.X, 0, look.Z)
+            if flat.Magnitude > 0.01 then
+                FlyO.BG.CFrame = CFrame.lookAt(root.Position, root.Position + flat)
+            end
+        end)
+    else
+        kunbind("MV_FLY")
+        clearFly()
+        local h = hum1()
+        if h then h.PlatformStand = false end
+    end
+end
+local function mvGravity(on)
+    if on then
+        if not MORIG.Grav then MORIG.Grav = Workspace.Gravity end
+        kbind("MV_GRAV", RunService.Heartbeat, function() Workspace.Gravity = MV.grav end)
+    else
+        kunbind("MV_GRAV")
+        if MORIG.Grav then Workspace.Gravity = MORIG.Grav end
+        MORIG.Grav = nil
+    end
+end
+
+local function tpTo(plr)
+    local mine = rootP()
+    local theirs = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+    if mine and theirs then
+        mine.CFrame = theirs.CFrame * CFrame.new(0, 0, 3)
+        toast(string.format(T("m_tped"), plr.DisplayName), C.BLUE)
+    end
+end
+local function spectate(plr)
+    local cam = Workspace.CurrentCamera
+    local h = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+    if cam and h then
+        cam.CameraSubject = h
+        toast(string.format(T("m_viewing"), plr.DisplayName), C.PURPLE)
+    end
+end
+local function stopSpectate()
+    local cam, h = Workspace.CurrentCamera, hum1()
+    if cam and h then cam.CameraSubject = h end
+end
+gui.Destroying:Connect(stopSpectate)
+
+local moveList = listPage(pages.Move, "pg_move")
+section(moveList, "m_sec_move", 1)
+switch(moveList, "m_speed", false, 2, mvWalkSpeed)
+slider(moveList, "m_speed_v", 16, 150, MV.speed, 3, function(v) MV.speed = v end)
+switch(moveList, "m_jump", false, 4, mvJumpPower)
+slider(moveList, "m_jump_v", 50, 250, MV.jump, 5, function(v) MV.jump = v end)
+switch(moveList, "m_inf", false, 6, mvInfJump)
+switch(moveList, "m_fly", false, 7, mvFly)
+slider(moveList, "m_fly_v", 20, 200, MV.fly, 8, function(v) MV.fly = v end)
+switch(moveList, "m_noclip", false, 9, mvNoclip)
+switch(moveList, "m_grav", false, 10, mvGravity)
+slider(moveList, "m_grav_v", 20, 300, MV.grav, 11, function(v) MV.grav = v end)
+section(moveList, "m_sec_list", 12)
+
+local ListHolder
+local function refreshList()
+    if not ListHolder or not ListHolder.Parent then return end
+    for _, c in ipairs(ListHolder:GetChildren()) do
+        if c:IsA("GuiObject") then c:Destroy() end
+    end
+    local n = 0
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LP then
+            n = n + 1
+            local f = new("Frame", {Size = UDim2.new(1, 0, 0, 46), BackgroundColor3 = C.PANEL, BackgroundTransparency = 0.3,
+                BorderSizePixel = 0, LayoutOrder = n, Parent = ListHolder}, {corner(12), stroke(C.PURPLE, 1, 0.82)})
+            label(f, {Position = UDim2.fromOffset(14, 5), Size = UDim2.new(1, -170, 0, 20), Text = plr.DisplayName,
+                Font = Enum.Font.GothamMedium, TextSize = 13, TextTruncate = Enum.TextTruncate.AtEnd})
+            label(f, {Position = UDim2.fromOffset(14, 25), Size = UDim2.new(1, -170, 0, 16), Text = "@" .. plr.Name,
+                TextSize = 10, TextColor3 = C.MUTED, TextTruncate = Enum.TextTruncate.AtEnd})
+            local function mini(x, key, cb)
+                local b = button(f, {AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, x, 0.5, 0), Size = UDim2.fromOffset(60, 28),
+                    BackgroundColor3 = WHITE}, {corner(9), tri(C.RED, C.PURPLE, C.BLUE, 0)})
+                label(b, {Size = UDim2.fromScale(1, 1), Text = T(key), Font = Enum.Font.GothamBold, TextSize = 12,
+                    TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 2})
+                b.MouseButton1Click:Connect(function() pcall(cb, plr) end)
+            end
+            mini(-80, "btn_tp", tpTo)
+            mini(-14, "btn_view", spectate)
+        end
+    end
+    if n == 0 then
+        local f = new("Frame", {Size = UDim2.new(1, 0, 0, 36), BackgroundColor3 = C.PANEL, BackgroundTransparency = 0.3,
+            BorderSizePixel = 0, Parent = ListHolder}, {corner(12), stroke(C.PURPLE, 1, 0.82)})
+        label(f, {Size = UDim2.fromScale(1, 1), Text = T("m_none"), TextSize = 12, TextColor3 = C.MUTED, TextXAlignment = Enum.TextXAlignment.Center})
+    end
+end
+actionRow(moveList, "m_refresh", 13, refreshList)
+actionRow(moveList, "m_stopview", 14, stopSpectate)
+ListHolder = new("Frame", {Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1,
+    LayoutOrder = 15, Parent = moveList}, {new("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder})})
+reg(refreshList) -- draws now, and again whenever the language changes
+bind(Players.PlayerAdded, function() task.delay(0.3, refreshList) end)
+bind(Players.PlayerRemoving, function() task.delay(0.3, refreshList) end)
+
+------------------------------------------------------------ FARM (no auto revive)
+-- Edit these if the game uses different names.
+local COLLECT_PATTERNS = {"ticket", "coin", "token", "cash", "orb"}
+
+local FM = {afkH = 500, avoidD = 25, collectV = 0.6, collectR = 400}
+local AfkO = {}
+local function fmAfk(on)
+    if on then
+        local root = rootP()
+        if not root then toast(T("f_noroot"), C.RED) return end
+        AfkO.Return = root.CFrame
+        local pos = root.Position + Vector3.new(0, FM.afkH, 0)
+        AfkO.Part = new("Part", {Name = "NX_Platform", Anchored = true, Size = Vector3.new(30, 2, 30), Position = pos,
+            Transparency = 0.6, Color = C.PURPLE, Material = Enum.Material.SmoothPlastic, Parent = Workspace})
+        root.CFrame = CFrame.new(pos + Vector3.new(0, 4, 0))
+        kbind("FM_AFK", RunService.Heartbeat, function()
+            local r = rootP()
+            if r and AfkO.Part and (r.Position - AfkO.Part.Position).Magnitude > 60 then
+                r.CFrame = CFrame.new(AfkO.Part.Position + Vector3.new(0, 4, 0))
+            end
+        end)
+    else
+        kunbind("FM_AFK")
+        if AfkO.Part then AfkO.Part:Destroy() AfkO.Part = nil end
+        local r = rootP()
+        if r and AfkO.Return then r.CFrame = AfkO.Return end
+        AfkO.Return = nil
+    end
+end
+
+local Bots = {}
+local function scanBot(inst)
+    if inst:IsA("Humanoid") then
+        local m = inst.Parent
+        if m and m:IsA("Model") and m ~= LP.Character and not Players:GetPlayerFromCharacter(m) then
+            Bots[m] = true
+        end
+    end
+end
+local avoidT = 0
+local function fmAvoid(on)
+    if on then
+        for _, d in ipairs(Workspace:GetDescendants()) do scanBot(d) end
+        kbind("FM_BOT_ADD", Workspace.DescendantAdded, scanBot)
+        kbind("FM_AVOID", RunService.Heartbeat, function(dt)
+            avoidT = avoidT + dt
+            if avoidT < 0.1 then return end
+            avoidT = 0
+            local root = rootP()
+            if not root then return end
+            for m in pairs(Bots) do
+                if not m.Parent then
+                    Bots[m] = nil
+                else
+                    local part = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
+                    if part then
+                        local off = root.Position - part.Position
+                        if off.Magnitude < FM.avoidD then
+                            local flat = Vector3.new(off.X, 0, off.Z)
+                            local dir = flat.Magnitude > 0.1 and flat.Unit or Vector3.new(1, 0, 0)
+                            root.CFrame = root.CFrame + dir * (FM.avoidD + 25) + Vector3.new(0, 3, 0)
+                            break
+                        end
+                    end
+                end
+            end
+        end)
+    else
+        kunbind("FM_AVOID")
+        kunbind("FM_BOT_ADD")
+        table.clear(Bots)
+    end
+end
+
+local Items, Visited = {}, {}
+local function nameMatches(name)
+    name = name:lower()
+    for _, p in ipairs(COLLECT_PATTERNS) do
+        if name:find(p, 1, true) then return true end
+    end
+    return false
+end
+local function scanItem(inst)
+    if inst:IsA("BasePart") and nameMatches(inst.Name) then
+        local ch = LP.Character
+        if ch and inst:IsDescendantOf(ch) then return end
+        local m = inst:FindFirstAncestorOfClass("Model")
+        if not m or not m:FindFirstChildOfClass("Humanoid") then Items[inst] = true end
+    end
+end
+local collectT = 0
+local function fmCollect(on)
+    if on then
+        table.clear(Visited)
+        for _, d in ipairs(Workspace:GetDescendants()) do scanItem(d) end
+        kbind("FM_ITEM_ADD", Workspace.DescendantAdded, scanItem)
+        collectT = 0
+        kbind("FM_COLLECT", RunService.Heartbeat, function(dt)
+            collectT = collectT + dt
+            if collectT < FM.collectV then return end
+            collectT = 0
+            local root = rootP()
+            if not root then return end
+            local best, bestD
+            local now = os.clock()
+            for part in pairs(Items) do
+                if not part.Parent then
+                    Items[part] = nil
+                elseif not Visited[part] or now - Visited[part] > 5 then
+                    local d = (part.Position - root.Position).Magnitude
+                    if d <= FM.collectR and (not bestD or d < bestD) then best, bestD = part, d end
+                end
+            end
+            if best then
+                Visited[best] = now
+                root.CFrame = best.CFrame + Vector3.new(0, 2, 0)
+                pcall(function()
+                    if firetouchinterest then
+                        firetouchinterest(root, best, 0)
+                        firetouchinterest(root, best, 1)
+                    end
+                end)
+                pcall(function()
+                    local prompt = best:FindFirstChildWhichIsA("ProximityPrompt", true)
+                    if prompt and fireproximityprompt then fireproximityprompt(prompt) end
+                end)
+            end
+        end)
+    else
+        kunbind("FM_COLLECT")
+        kunbind("FM_ITEM_ADD")
+        table.clear(Items)
+    end
+end
+
+local farmList = listPage(pages.Farm, "pg_farm")
+section(farmList, "f_sec_survive", 1)
+switch(farmList, "f_afk", false, 2, fmAfk)
+slider(farmList, "f_afk_h", 100, 1500, FM.afkH, 3, function(v) FM.afkH = v end, 50)
+switch(farmList, "f_avoid", false, 4, fmAvoid)
+slider(farmList, "f_avoid_r", 10, 80, FM.avoidD, 5, function(v) FM.avoidD = v end)
+section(farmList, "f_sec_collect", 6)
+switch(farmList, "f_collect", false, 7, fmCollect)
+slider(farmList, "f_collect_v", 0.2, 3, FM.collectV, 8, function(v) FM.collectV = v end, 0.1, "s")
+slider(farmList, "f_collect_r", 50, 1500, FM.collectR, 9, function(v) FM.collectR = v end, 50)
+noteRow(farmList, "f_note", 10, 70)
+
+------------------------------------------------------------ SHOP (unlock everything in the shop UI)
+-- Words that identify the shop window. Edit if the game names it differently.
+local SHOP_PATTERNS = {"shop", "store", "market"}
+
+local SHOP = {orig = {}, count = 0}
+local shopVal, shopT = nil, 0
+
+local function isShopName(n)
+    n = n:lower()
+    for _, p in ipairs(SHOP_PATTERNS) do
+        if n:find(p, 1, true) then return true end
+    end
+    return false
+end
+local function isLockName(n)
+    if n:lower():find("unlock", 1, true) then return false end
+    return (n:find("Lock", 1, true) or n:find("^lock") or n:find("[^%a]lock")) ~= nil
+end
+local function remember(inst, key, value)
+    local o = SHOP.orig[inst]
+    if not o then
+        o = {}
+        SHOP.orig[inst] = o
+    end
+    if o[key] == nil then
+        o[key] = value
+        SHOP.count = SHOP.count + 1
+    end
+end
+local LOCK_FALSE = {"Locked", "IsLocked"}
+local LOCK_TRUE = {"Unlocked", "IsUnlocked", "Owned", "IsOwned"}
+
+local function unlockInst(inst, seen)
+    if seen[inst] then return end
+    seen[inst] = true
+    if inst:IsA("GuiObject") then
+        if inst.Visible and isLockName(inst.Name) then
+            remember(inst, "Visible", true)
+            inst.Visible = false
+        end
+        if inst:IsA("GuiButton") then
+            if not inst.Active then
+                remember(inst, "Active", false)
+                inst.Active = true
+            end
+            pcall(function()
+                if inst.Interactable == false then
+                    remember(inst, "Interactable", false)
+                    inst.Interactable = true
+                end
+            end)
+        end
+    end
+    for _, a in ipairs(LOCK_FALSE) do
+        if inst:GetAttribute(a) == true then
+            remember(inst, "attr:" .. a, true)
+            inst:SetAttribute(a, false)
+        end
+    end
+    for _, a in ipairs(LOCK_TRUE) do
+        if inst:GetAttribute(a) == false then
+            remember(inst, "attr:" .. a, false)
+            inst:SetAttribute(a, true)
+        end
+    end
+end
+local function shopPass()
+    local pg = LP:FindFirstChildOfClass("PlayerGui")
+    if not pg then return end
+    local seen = {}
+    for _, d in ipairs(pg:GetDescendants()) do
+        if (d:IsA("GuiObject") or d:IsA("LayerCollector")) and isShopName(d.Name) and not d:IsDescendantOf(gui) then
+            unlockInst(d, seen)
+            for _, x in ipairs(d:GetDescendants()) do unlockInst(x, seen) end
+        end
+    end
+end
+local function shopRestore()
+    for inst, props in pairs(SHOP.orig) do
+        if inst.Parent then
+            for k, v in pairs(props) do
+                pcall(function()
+                    if k:sub(1, 5) == "attr:" then inst:SetAttribute(k:sub(6), v) else inst[k] = v end
+                end)
+            end
+        end
+    end
+    SHOP.orig = {}
+    SHOP.count = 0
+end
+local function shopToggle(on)
+    if on then
+        pcall(shopPass)
+        if SHOP.count > 0 then
+            toast(string.format(T("s_done"), SHOP.count), C.RED)
+        else
+            toast(T("s_none"), C.BLUE)
+        end
+        if shopVal then shopVal.Text = tostring(SHOP.count) end
+        shopT = 0
+        kbind("SHOP_LOOP", RunService.Heartbeat, function(dt)
+            shopT = shopT + dt
+            if shopT < 1.5 then return end
+            shopT = 0
+            pcall(shopPass)
+            if shopVal then shopVal.Text = tostring(SHOP.count) end
+        end)
+    else
+        kunbind("SHOP_LOOP")
+        shopRestore()
+        if shopVal then shopVal.Text = "0" end
+    end
+end
+
+local shopList = listPage(pages.Shop, "pg_shop")
+section(shopList, "s_sec", 1)
+switch(shopList, "s_unlock", false, 2, shopToggle)
+shopVal = infoRow(shopList, "s_found", 3)
+noteRow(shopList, "s_note", 4, 120)
+
+------------------------------------------------------------ SETTINGS
+local setList = listPage(pages.Settings, "settings")
+
+-- language
+section(setList, "sec_lang", 1)
+local langRow = row(setList, 2)
+label(langRow, {Position = UDim2.fromOffset(14, 0), Size = UDim2.new(1, -200, 1, 0), Text = "ภาษา / Language", Font = Enum.Font.GothamMedium, TextSize = 13})
+local seg = new("Frame", {AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(170, 30), BackgroundColor3 = C.OFF, BorderSizePixel = 0, Parent = langRow}, {corner(15)})
+local pill = new("Frame", {Position = UDim2.new(0, 3, 0, 3), Size = UDim2.new(0.5, -3, 1, -6), BackgroundColor3 = WHITE, BorderSizePixel = 0, Parent = seg}, {corner(12), tri(C.RED, C.PURPLE, C.BLUE, 0)})
+local bTh = button(seg, {Size = UDim2.fromScale(0.5, 1), BackgroundTransparency = 1, Text = "ไทย", TextSize = 12, ZIndex = 2})
+local bEn = button(seg, {Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromScale(0.5, 1), BackgroundTransparency = 1, Text = "English", TextSize = 12, ZIndex = 2})
+reg(function()
+    bTh.TextColor3 = LANG == "th" and WHITE or C.MUTED
+    bEn.TextColor3 = LANG == "en" and WHITE or C.MUTED
+end)
+local function setLang(l)
+    if LANG == l then return end
+    LANG = l
+    tw(pill, 0.3, {Position = (l == "th") and UDim2.new(0, 3, 0, 3) or UDim2.new(0.5, 0, 0, 3)}, Enum.EasingStyle.Back)
+    applyLang()
+    local nm = (l == "th") and "ไทย" or "English"
+    logEv("ev_lang", nm, C.PURPLE)
+    toast("ภาษา / Language: " .. nm, C.PURPLE)
+end
+bTh.MouseButton1Click:Connect(function() setLang("th") end)
+bEn.MouseButton1Click:Connect(function() setLang("en") end)
+
+-- display
+section(setList, "sec_ui", 3)
+switch(setList, "fx", true, 4, function(v)
+    for _, o in ipairs(fxList) do o.Visible = v end
+end)
+switch(setList, "glow", true, 5, function(v)
+    tw(ring, 0.25, {Transparency = v and 0.1 or 1})
+end)
+switch(setList, "anim", true, 6, function(v) S.anim = v end)
+switch(setList, "hotkey", true, 7, function(v) S.hotkey = v end)
+
+-- discord community
+section(setList, "sec_comm", 8)
+local function discordCard(lo, title, col, descKey, link)
+    local f = row(setList, lo, 100)
+    new("Frame", {Size = UDim2.new(0, 3, 1, -24), Position = UDim2.fromOffset(0, 12), BackgroundColor3 = col, BorderSizePixel = 0, Parent = f}, {corner(2)})
+    label(f, {Position = UDim2.fromOffset(18, 10), Size = UDim2.new(1, -170, 0, 20), Text = title, Font = Enum.Font.GothamBlack, TextSize = 15, TextColor3 = col})
+    tl(label(f, {Position = UDim2.fromOffset(18, 32), Size = UDim2.new(1, -170, 0, 36), TextSize = 11, TextColor3 = C.MUTED, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top}), descKey)
+    label(f, {Position = UDim2.fromOffset(18, 74), Size = UDim2.new(1, -170, 0, 16), Text = link, TextSize = 11, Font = Enum.Font.GothamMedium, TextColor3 = C.BLUE, TextTruncate = Enum.TextTruncate.AtEnd})
+    local b = button(f, {AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 0), Size = UDim2.fromOffset(130, 36), BackgroundColor3 = WHITE},
+        {corner(12), grad(col, C.PURPLE, 0)})
+    tl(label(b, {Size = UDim2.fromScale(1, 1), Font = Enum.Font.GothamBold, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 2}), "copy_link")
+    b.MouseButton1Click:Connect(function()
+        if copyText(link) then
+            toast(T("copied") .. "  " .. title, col)
+            logEv("ev_copy", title, col)
+        else
+            toast(T("copy_fail"), C.RED)
+        end
+    end)
+end
+discordCard(9, "NEXORA", C.RED, "nex_desc", LINKS.NEXORA)
+discordCard(10, "MEEN HUB", C.BLUE, "meen_desc", LINKS.MEEN)
+
+------------------------------------------------------------ minimize / close / open
+local float = button(gui, {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 44, 0.5, 0), Size = UDim2.fromOffset(52, 52), BackgroundColor3 = WHITE,
+    Visible = false, ZIndex = 50}, {corner(26), tri(C.RED, C.PURPLE, C.BLUE, 45), stroke(C.RED, 1.5, 0.3)})
+label(float, {Size = UDim2.fromScale(1, 1), Text = "N", Font = Enum.Font.GothamBlack, TextSize = 22, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 51})
+makeDraggable(float, float)
+
+local function hideUI()
+    tw(mscale, 0.2, {Scale = 0.85}, Enum.EasingStyle.Quint, Enum.EasingDirection.In).Completed:Connect(function()
+        holder.Visible = false
+        float.Visible = true
+    end)
+end
+local function showUI()
+    float.Visible = false
+    holder.Visible = true
+    tw(mscale, 0.35, {Scale = 1}, Enum.EasingStyle.Back)
+end
+minBtn.MouseButton1Click:Connect(hideUI)
+float.MouseButton1Click:Connect(function()
+    if float:GetAttribute("moved") then return end
+    showUI()
+end)
+closeBtn.MouseButton1Click:Connect(function()
+    tw(mscale, 0.25, {Scale = 0.8}, Enum.EasingStyle.Quint, Enum.EasingDirection.In).Completed:Connect(function()
+        gui:Destroy()
+    end)
+end)
+bind(UIS.InputBegan, function(i, gp)
+    if gp or not S.hotkey then return end
+    if i.KeyCode == Enum.KeyCode.RightControl then
+        if holder.Visible then hideUI() else showUI() end
+    end
+end)
+
+------------------------------------------------------------ real events (players / character)
+bind(Players.PlayerAdded, function(p) logEv("ev_join", p.DisplayName, C.BLUE) end)
+bind(Players.PlayerRemoving, function(p) logEv("ev_leave", p.DisplayName, C.RED) end)
+local function hookChar(ch)
+    task.spawn(function()
+        local hum = ch:WaitForChild("Humanoid", 8)
+        if not hum then return end
+        applyHum()
+        hum.Died:Connect(function() logEv("ev_died", nil, C.RED) end)
+    end)
+end
+bind(LP.CharacterAdded, function(ch)
+    logEv("ev_spawn", nil, C.PURPLE)
+    hookChar(ch)
+end)
+if LP.Character then hookChar(LP.Character) end
+
+------------------------------------------------------------ live loop (FPS / ping / health / position)
+local frames, acc = 0, 0
+bind(RunService.Heartbeat, function(dt)
+    frames = frames + 1
+    acc = acc + dt
+end)
+local function getPing()
+    local p
+    pcall(function() p = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue() end)
+    if not p then pcall(function() p = LP:GetNetworkPing() * 1000 end) end
+    return p or 0
+end
+local startT = os.clock()
+local fpsNow = 0
+task.spawn(function()
+    local n = 0
+    while gui.Parent do
+        task.wait(0.25)
+        n = n + 1
+        local inst = (acc > 0) and (frames / acc) or 0
+        frames, acc = 0, 0
+        fpsNow = (fpsNow == 0) and inst or (fpsNow * 0.4 + inst * 0.6)
+        local fps = math.floor(fpsNow + 0.5)
+        local ping = math.floor(getPing() + 0.5)
+        local hum, hrp = getHum()
+        local hp = hum and hum.Health or 0
+        local mhp = hum and hum.MaxHealth or 100
+        if mhp <= 0 then mhp = 100 end
+        local pct = math.clamp(hp / mhp, 0, 1)
+        ringFill = math.floor(pct * RING_N + 0.5)
+
+        if n % 4 == 0 then -- push one sample / second into the chart
+            table.remove(hist, 1)
+            table.insert(hist, fps)
+            if holder.Visible and home.Visible then drawChart() end
+        end
+
+        if holder.Visible then
+            local sess = fmtTime(os.clock() - startT)
+            heroClock.Text = nowStr("%H:%M:%S")
+            heroSub.Text = nowStr("%d/%m/%Y") .. "  ·  " .. sess
+            if home.Visible then
+                stPlayers.Text = tostring(#Players:GetPlayers())
+                stFps.Text = tostring(fps)
+                stPing.Text = ping .. " ms"
+                fpsTop.Text = tostring(fps)
+                ringPct.Text = math.floor(pct * 100 + 0.5) .. "%"
+                legendVals[1].Text = math.floor(hp) .. "/" .. math.floor(mhp)
+                legendVals[2].Text = tostring(fps)
+                legendVals[3].Text = ping .. "ms"
+            end
+            if pages.Me.Visible then
+                hpText.Text = math.floor(hp) .. " / " .. math.floor(mhp)
+                tw(hpFill, 0.25, {Size = UDim2.fromScale(pct, 1)})
+                tFps.Text = tostring(fps)
+                tPing.Text = ping .. " ms"
+                tSpeed.Text = hum and tostring(math.floor(hum.WalkSpeed)) or "-"
+                tSess.Text = sess
+                if hrp then
+                    local p = hrp.Position
+                    infoVals.position.Text = math.floor(p.X) .. ", " .. math.floor(p.Y) .. ", " .. math.floor(p.Z)
+                else
+                    infoVals.position.Text = "-"
+                end
+                infoVals.in_server.Text = #Players:GetPlayers() .. " / " .. Players.MaxPlayers
+                infoVals.acc_age.Text = LP.AccountAge .. " " .. T("days")
+                infoVals.server.Text = (game.JobId ~= "" and string.sub(game.JobId, 1, 8)) or "Studio"
+            end
+        end
+    end
+end)
+
+------------------------------------------------------------ start
+logEv("ev_load", nil, C.RED)
+setPage("Home")
+tw(mscale, 0.5, {Scale = 1}, Enum.EasingStyle.Back)
+task.delay(0.8, function()
+    if gui.Parent then toast(T("welcome") .. LP.DisplayName, C.RED) end
+end)
