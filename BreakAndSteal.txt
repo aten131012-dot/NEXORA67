@@ -1,0 +1,996 @@
+--[[
+    Break and Steal an Egg  |  Auto Break + Auto Steal  (client-side, single file)
+    Systems: AUTO BREAK (SW) and AUTO STEAL (ST) with a shared GUI.
+
+    Names verified against the Workspace dump: Build.ZoneBuilds/<zone>/Eggs/<model>/Egg, Build.ZoneHitboxes.SafeZone,
+    Plots/Base_N (OwnerUserId -> SpawnPoint = START), AnimalPickups, guards = Models with a ChaseState attribute.
+    Anything still unverified (animal pickup prompt, carry detection) has fallbacks - tweak CONFIG if needed.
+]]
+
+------------------------------------------------------------------ SERVICES / ENV
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
+local CoreGui           = game:GetService("CoreGui")
+local Workspace         = game:GetService("Workspace")
+local LP                = Players.LocalPlayer
+
+local ENV = (getgenv and getgenv()) or _G
+
+-- re-execute safety: run the previous cleanup first
+if ENV.__BSE_Cleanup then pcall(ENV.__BSE_Cleanup) end
+
+-- shared gate: other scripts can set EventGate.Active = true to pause both systems
+local EventGate = ENV.EventGate or { Active = false, StealBusy = false }
+ENV.EventGate = EventGate
+
+------------------------------------------------------------------ CONFIG
+local CONFIG = {
+    GroundY       = 3.693,   -- fixed Y while walking
+    MaxDt         = 0.05,    -- dt cap per Heartbeat
+    BreakStopDist = 4,       -- min stop distance from an egg
+    BreakGap      = 3,       -- extra gap beyond egg half-size
+    -- rarity order, low -> high (rank = index)
+    Rarities = { "Common","Uncommon","Rare","Epic","Legendary","Mythic","Secret","Divine",
+                 "Cosmic","Celestial","Inferno","Void","Omega" },
+    -- name patterns (lowercase, Lua patterns) used to locate map objects
+    SafeZonePatterns = { "^safezone$", "^safe zone$", "safe" },
+    StartPatterns    = { "^start$", "^startline$", "^start_" , "^start" },
+    GuardPatterns    = { "guard" },
+    PickaxePattern   = "pickaxe",
+}
+local RANK = {}
+for i, n in ipairs(CONFIG.Rarities) do RANK[n] = i end
+
+------------------------------------------------------------------ TINY UTILITIES
+local function getChar()  return LP.Character end
+local function getRoot()  local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart") end
+local function getHum()   local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid") end
+
+local function newSystem() return { Running = false, Job = 0, Status = "Idle" } end
+local function alive(sys, id) return sys.Running and sys.Job == id end
+
+-- wait while the event gate is active; returns false if the job died meanwhile
+local function gateWait(sys, id)
+    while EventGate.Active and alive(sys, id) do task.wait(0.2) end
+    return alive(sys, id)
+end
+
+local function parseNumber(v)  -- "1.5M", "2k", 3000 -> number
+    if type(v) == "number" then return v end
+    if type(v) ~= "string" then return 0 end
+    local s = v:gsub(",", ""):gsub("%$", ""):gsub("/s", ""):gsub("%s", "")
+    local num, suf = s:match("^([%d%.]+)(%a*)$")
+    num = tonumber(num); if not num then return 0 end
+    local mult = ({ k = 1e3, m = 1e6, b = 1e9, t = 1e12, qa = 1e15, qi = 1e18 })[(suf or ""):lower()] or 1
+    return num * mult
+end
+
+local function posOf(inst)  -- world position of a Part or Model
+    if not inst then return nil end
+    if inst:IsA("BasePart") then return inst.Position end
+    if inst:IsA("Model") then return inst:GetPivot().Position end
+    local p = inst:FindFirstChildWhichIsA("BasePart", true)
+    return p and p.Position
+end
+
+-- find (and cache) a Workspace object by name patterns
+local nameCache = {}
+local function findNamed(key, patterns, classFilter)
+    local c = nameCache[key]
+    if c and c.Parent then return c end
+    for _, pat in ipairs(patterns) do
+        for _, d in ipairs(Workspace:GetDescendants()) do
+            if (not classFilter or d:IsA(classFilter)) and d.Name:lower():find(pat) then
+                if d:IsA("BasePart") or d:IsA("Model") then
+                    nameCache[key] = d; return d
+                end
+            end
+        end
+    end
+end
+
+local function firePrompt(prompt)
+    if not prompt then return false end
+    local ok = false
+    if fireproximityprompt then
+        ok = pcall(fireproximityprompt, prompt)
+    end
+    if not ok then
+        ok = pcall(function() prompt:InputHoldBegin(); task.wait((prompt.HoldDuration or 0) + 0.1); prompt:InputHoldEnd() end)
+    end
+    return ok
+end
+
+------------------------------------------------------------------ STATUS + UI HOOKS
+local UI = { StatusSW = nil, StatusST = nil, ToggleSW = nil, ToggleST = nil }
+local SW = newSystem()
+local ST = newSystem()
+
+local Settings = {
+    SW = { Speed = 150, Rarity = { Celestial = true, Secret = true, Cosmic = true } },
+    ST = { Speed = 150, Noclip = true, SafeWait = true, AntiRagdoll = true,
+           Rarity = {}, Mutation = {}, MinIncome = 0, TpMode = false, Collected = 0, Busy = false },
+}
+
+local function statusSW(t) SW.Status = t; if UI.StatusSW then UI.StatusSW.Text = t end end
+local function statusST(t)
+    t = t .. " | Stolen: " .. Settings.ST.Collected
+    ST.Status = t; if UI.StatusST then UI.StatusST.Text = t end
+end
+
+local function notice(text)
+    pcall(function() game:GetService("StarterGui"):SetCore("SendNotification", { Title = "Egg Script", Text = text, Duration = 3 }) end)
+end
+
+------------------------------------------------------------------ MOVEMENT (CFrame stepping)
+-- Walk toward getPos() by stepping the root CFrame each Heartbeat. Returns true on arrival.
+local function walkTo(sys, id, getPos, stopDist, speed)
+    while alive(sys, id) do
+        if not gateWait(sys, id) then return false end
+        local root = getRoot()
+        local target = getPos()
+        if not root or not target then return false end
+        local p = root.Position
+        local flat = Vector3.new(target.X - p.X, 0, target.Z - p.Z)
+        local dist = flat.Magnitude
+        local look = Vector3.new(target.X, CONFIG.GroundY, target.Z)
+        if dist <= stopDist or dist < 0.01 then
+            local here = Vector3.new(p.X, CONFIG.GroundY, p.Z)
+            if (look - here).Magnitude > 0.01 then root.CFrame = CFrame.lookAt(here, look) end
+            root.AssemblyLinearVelocity = Vector3.zero
+            return true
+        end
+        local dt = math.min(RunService.Heartbeat:Wait(), CONFIG.MaxDt)
+        local step = math.min(speed * dt, dist - stopDist)
+        local np = Vector3.new(p.X, CONFIG.GroundY, p.Z) + flat.Unit * step
+        root.CFrame = CFrame.lookAt(np, look)
+        root.AssemblyLinearVelocity = Vector3.zero
+    end
+    return false
+end
+
+local function teleportTo(pos)
+    local root = getRoot(); if not root then return false end
+    root.CFrame = CFrame.new(pos.X, CONFIG.GroundY, pos.Z)
+    root.AssemblyLinearVelocity = Vector3.zero
+    return true
+end
+
+------------------------------------------------------------------ EGG SCANNING
+local function readRarity(...)
+    for _, inst in ipairs({ ... }) do
+        if inst then
+            local r = inst:GetAttribute("Rarity")
+            if type(r) == "string" then return r end
+        end
+    end
+end
+
+-- rarity of an egg: EggOverhead > EggInfoUi > Rarity label (text) or its RarityGradient attribute
+local function eggRarity(model, part)
+    local r = readRarity(model, part)
+    if r then return r end
+    local lbl = part:FindFirstChild("Rarity", true) or model:FindFirstChild("Rarity", true)
+    if lbl then
+        local g = lbl:FindFirstChild("RarityGradient")
+        local ga = g and g:GetAttribute("Rarity")
+        if type(ga) == "string" then return ga end
+        if lbl:IsA("TextLabel") and RANK[lbl.Text] then return lbl.Text end
+    end
+end
+
+-- list every live egg: { part, model, rarity, size, half, zone }
+local function scanEggs()
+    local out = {}
+    local build = Workspace:FindFirstChild("Build")
+    local zb = build and build:FindFirstChild("ZoneBuilds")
+    if not zb then return out end
+    for _, zone in ipairs(zb:GetChildren()) do
+        local eggs = zone:FindFirstChild("Eggs")
+        if eggs then
+            for _, model in ipairs(eggs:GetChildren()) do
+                local part = model:FindFirstChild("Egg")
+                if part and part:IsA("BasePart") and part:IsDescendantOf(Workspace) and part:GetAttribute("Broken") ~= true then
+                    local sz = model:IsA("Model") and model:GetExtentsSize() or part.Size
+                    out[#out + 1] = {
+                        part = part, model = model, zone = zone,
+                        rarity = eggRarity(model, part),
+                        size = math.round(sz.X * sz.Y * sz.Z * 100),
+                        half = math.max(sz.X, sz.Z) / 2,
+                    }
+                end
+            end
+        end
+    end
+    return out
+end
+
+local function eggAlive(e)
+    if not (e and e.part and e.part.Parent and e.part:IsDescendantOf(Workspace)) then return false end
+    if e.part:GetAttribute("Broken") == true then return false end
+    local hp = e.part:GetAttribute("Health")
+    return not (type(hp) == "number" and hp <= 0)
+end
+
+------------------------------------------------------------------ AUTO SWING MANAGER
+local Swing = { learned = nil, pressed = false, refs = 0, monitorJob = 0 }
+
+local STATE_ATTRS = { "On", "Enabled", "Active", "AutoSwing", "State", "IsOn", "Toggled" }
+
+local function swingButton()
+    local pg = LP:FindFirstChild("PlayerGui")
+    local main = pg and pg:FindFirstChild("MainGUI")
+    return main and main:FindFirstChild("AutoSwing")
+end
+
+-- signature of the button's look (text, colors, visibility, image, stroke, gradient, BoolValue)
+local function signature(btn)
+    local parts = {}
+    local function add(k, v) parts[#parts + 1] = k .. "=" .. tostring(v) end
+    add("vis", btn.Visible)
+    add("bg", tostring(btn.BackgroundColor3) .. "/" .. btn.BackgroundTransparency)
+    if btn:IsA("TextButton") then add("txt", btn.Text); add("tc", btn.TextColor3) end
+    for _, d in ipairs(btn:GetDescendants()) do
+        if d:IsA("TextLabel") then add("t:" .. d.Name, d.Text .. "|" .. tostring(d.TextColor3) .. "|" .. d.TextTransparency)
+        elseif d:IsA("ImageLabel") then add("i:" .. d.Name, d.Image .. "|" .. tostring(d.ImageColor3) .. "|" .. d.ImageTransparency)
+        elseif d:IsA("UIStroke") then add("s:" .. d.Name, tostring(d.Color))
+        elseif d:IsA("UIGradient") then
+            local kp = d.Color.Keypoints
+            add("g:" .. d.Name, tostring(kp[1].Value) .. tostring(kp[#kp].Value))
+        elseif d:IsA("BoolValue") then add("b:" .. d.Name, d.Value)
+        elseif d:IsA("NumberValue") then add("n:" .. d.Name, d.Value) end
+    end
+    return table.concat(parts, ";")
+end
+
+-- ON/OFF state: attributes -> BoolValue -> ON/OFF text -> learned look. nil = unknown
+local function swingState(btn)
+    for _, a in ipairs(STATE_ATTRS) do
+        local v = btn:GetAttribute(a)
+        if type(v) == "boolean" then return v end
+    end
+    for _, c in ipairs(btn:GetChildren()) do
+        if c:IsA("BoolValue") then return c.Value end
+    end
+    local texts = {}
+    if btn:IsA("TextButton") then texts[#texts + 1] = btn.Text end
+    for _, d in ipairs(btn:GetDescendants()) do if d:IsA("TextLabel") then texts[#texts + 1] = d.Text end end
+    for _, t in ipairs(texts) do
+        local u = t:upper()
+        if u:find("%f[%a]OFF%f[%A]") then return false end
+        if u:find("%f[%a]ON%f[%A]") then return true end
+    end
+    if Swing.learned then
+        local s = signature(btn)
+        if s == Swing.learned.on then return true end
+        if s == Swing.learned.off then return false end
+    end
+    return nil
+end
+
+local function pressSwing(btn)
+    local before = signature(btn)
+    local known = swingState(btn)
+    pcall(function() if firesignal then firesignal(btn.MouseButton1Click) end end)
+    pcall(function() if firesignal then firesignal(btn.Activated) end end)
+    task.wait(0.35)
+    -- learn: first press assumed OFF -> ON when the state was unreadable
+    if not Swing.learned and known == nil and not Swing.pressed then
+        local after = signature(btn)
+        if after ~= before then Swing.learned = { off = before, on = after } end
+    end
+    Swing.pressed = true
+end
+
+local function findPickaxe()
+    local char, bp = getChar(), LP:FindFirstChildOfClass("Backpack")
+    for _, holder in ipairs({ char, bp }) do
+        if holder then
+            for _, t in ipairs(holder:GetChildren()) do
+                if t:IsA("Tool") and t.Name:lower():find(CONFIG.PickaxePattern) then return t, holder == char end
+            end
+        end
+    end
+end
+
+local function ensurePickaxe()
+    local tool, equipped = findPickaxe()
+    if tool and not equipped then
+        local hum = getHum(); if hum then pcall(function() hum:EquipTool(tool) end) end
+    end
+    return tool
+end
+
+-- keep swinging on while any system holds a reference
+local function swingMonitor(id)
+    local warned = false
+    while Swing.refs > 0 and Swing.monitorJob == id do
+        local ok, err = pcall(function()
+            local tool = ensurePickaxe()
+            local btn = swingButton()
+            if btn then
+                warned = false
+                local st = swingState(btn)
+                if st == false or (st == nil and not Swing.pressed) then pressSwing(btn) end
+            else
+                if not warned then notice("AutoSwing button not found - using swing event"); warned = true end
+                if tool then pcall(function() tool:Activate() end) end -- fallback: the game's swing
+            end
+        end)
+        if not ok then warn("[SwingMonitor] " .. tostring(err)) end
+        task.wait(0.4)
+    end
+end
+
+function Swing.acquire()
+    Swing.refs += 1
+    if Swing.refs == 1 then
+        Swing.monitorJob += 1
+        task.spawn(swingMonitor, Swing.monitorJob)
+    end
+end
+function Swing.release()
+    Swing.refs = math.max(0, Swing.refs - 1)
+    if Swing.refs == 0 then Swing.monitorJob += 1 end
+end
+
+------------------------------------------------------------------ AUTO BREAK (SW)
+local function pickBreakTarget()
+    local root = getRoot(); if not root then return end
+    local best
+    for _, e in ipairs(scanEggs()) do
+        if e.rarity and Settings.SW.Rarity[e.rarity] then
+            e.dist = (e.part.Position - root.Position).Magnitude
+            e.rank = RANK[e.rarity] or 0
+            if not best
+                or e.size > best.size
+                or (e.size == best.size and (e.rank > best.rank
+                    or (e.rank == best.rank and e.dist < best.dist))) then
+                best = e
+            end
+        end
+    end
+    return best
+end
+
+local function runBreak(id)
+    Swing.acquire()
+    local held = true
+    local function done() if held then held = false; Swing.release() end end
+    local ok, err = pcall(function()
+        while alive(SW, id) do
+            if not gateWait(SW, id) then break end
+            local egg = pickBreakTarget()
+            if not egg then
+                statusSW("No matching egg - waiting")
+                task.wait(1.5)
+            else
+                statusSW(("Walking to %s egg (size %d)"):format(egg.rarity, egg.size))
+                local stop = math.max(CONFIG.BreakStopDist, egg.half + CONFIG.BreakGap)
+                local arrived = walkTo(SW, id, function()
+                    return eggAlive(egg) and egg.part.Position or nil
+                end, stop, Settings.SW.Speed)
+                if arrived and alive(SW, id) then
+                    statusSW(("Breaking %s egg"):format(egg.rarity))
+                    local t0 = os.clock()
+                    -- keep swinging until broken (60s safety timeout, re-aim each tick)
+                    while alive(SW, id) and eggAlive(egg) and os.clock() - t0 < 60 do
+                        if not gateWait(SW, id) then break end
+                        local root = getRoot()
+                        if root and egg.part.Parent then
+                            local p, t = root.Position, egg.part.Position
+                            local d = Vector3.new(t.X - p.X, 0, t.Z - p.Z).Magnitude
+                            if d > stop + 3 then break end -- drifted away -> re-walk
+                            root.CFrame = CFrame.lookAt(Vector3.new(p.X, CONFIG.GroundY, p.Z), Vector3.new(t.X, CONFIG.GroundY, t.Z))
+                            root.AssemblyLinearVelocity = Vector3.zero
+                        end
+                        task.wait(0.1)
+                    end
+                    if not eggAlive(egg) then statusSW("Egg broken") end
+                end
+                task.wait(0.1)
+            end
+        end
+    end)
+    done()
+    if not ok then warn("[AutoBreak] " .. tostring(err)) end
+    return ok
+end
+
+------------------------------------------------------------------ AUTO STEAL (ST) : BUSY LOCK
+local Busy = { conns = {}, collide = {}, saved = nil, bound = false }
+local LOCK_KEYS = {
+    Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D, Enum.KeyCode.Space,
+    Enum.KeyCode.Up, Enum.KeyCode.Down, Enum.KeyCode.Left, Enum.KeyCode.Right,
+    Enum.KeyCode.Thumbstick1,
+}
+
+local function setBusy(on)
+    if on == Settings.ST.Busy then return end
+    Settings.ST.Busy = on
+    EventGate.StealBusy = on
+    if on then
+        -- 1) swallow movement keys at very high priority
+        pcall(function()
+            ContextActionService:BindActionAtPriority("ST_Lock", function() return Enum.ContextActionResult.Sink end,
+                false, Enum.ContextActionPriority.High.Value + 1000, unpack(LOCK_KEYS))
+            Busy.bound = true
+        end)
+        -- 2) freeze humanoid
+        local hum = getHum()
+        if hum then
+            Busy.saved = { ws = hum.WalkSpeed, jp = hum.JumpPower, jh = hum.JumpHeight, ujp = hum.UseJumpPower }
+            hum.WalkSpeed = 0; hum.JumpPower = 0; hum.JumpHeight = 0
+            if Settings.ST.AntiRagdoll then
+                pcall(function()
+                    hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+                    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+                end)
+            end
+        end
+        -- 3) noclip + anti-ragdoll every physics step
+        Busy.conns[#Busy.conns + 1] = RunService.Stepped:Connect(function()
+            local char = getChar(); if not char then return end
+            for _, d in ipairs(char:GetDescendants()) do
+                if Settings.ST.Noclip and d:IsA("BasePart") then
+                    if d.CanCollide then Busy.collide[d] = true; d.CanCollide = false end
+                elseif Settings.ST.AntiRagdoll then
+                    if d:IsA("Motor6D") and not d.Enabled then d.Enabled = true
+                    elseif d:IsA("BallSocketConstraint") and d.Enabled then d.Enabled = false end
+                end
+            end
+        end)
+    else
+        for _, c in ipairs(Busy.conns) do c:Disconnect() end
+        Busy.conns = {}
+        if Busy.bound then pcall(function() ContextActionService:UnbindAction("ST_Lock") end); Busy.bound = false end
+        for part in pairs(Busy.collide) do
+            if part and part.Parent then part.CanCollide = true end -- these were collidable before
+        end
+        Busy.collide = {}
+        local hum = getHum()
+        if hum and Busy.saved then
+            hum.WalkSpeed = Busy.saved.ws; hum.UseJumpPower = Busy.saved.ujp
+            hum.JumpPower = Busy.saved.jp; hum.JumpHeight = Busy.saved.jh
+            pcall(function()
+                hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            end)
+        end
+        Busy.saved = nil
+    end
+end
+
+------------------------------------------------------------------ AUTO STEAL (ST) : TARGETS
+local function pickupsFolder() return Workspace:FindFirstChild("AnimalPickups") end
+
+local function animalIncome(inst)
+    -- real layout: AnimalOverhead > CashPerSecond (Frame) > CashPerSecond (TextLabel) e.g. "$1.2M/s"
+    local ov = inst:FindFirstChild("AnimalOverhead", true)
+    local lab = ov and ov:FindFirstChild("CashPerSecond") and ov.CashPerSecond:FindFirstChild("CashPerSecond")
+    if lab and lab:IsA("TextLabel") then
+        local n = parseNumber((lab.Text:gsub("[^%d%.%a]", ""):gsub("[sS]$", "")))
+        if n > 0 then return n end
+    end
+    for k, v in pairs(inst:GetAttributes()) do
+        local lk = k:lower()
+        if lk:find("income") or lk:find("persecond") or lk:find("cashper") then return parseNumber(v) end
+    end
+    local best = 0
+    for _, d in ipairs(inst:GetDescendants()) do -- fallback: overhead text such as "$1.2M/s"
+        if d:IsA("TextLabel") and d.Text:find("/s") then best = math.max(best, parseNumber(d.Text)) end
+    end
+    return best
+end
+
+local function animalPrompt(inst)
+    local p = inst:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if p then return p end
+    -- prompts may be created at runtime on a nearby anchor: nearest prompt within 15 studs
+    local pos, best, bd = posOf(inst), nil, 15
+    if not pos then return end
+    for _, d in ipairs(Workspace:GetDescendants()) do
+        if d:IsA("ProximityPrompt") and d.Parent and d.Parent:IsA("Attachment") or d:IsA("ProximityPrompt") and d.Parent and d.Parent:IsA("BasePart") then
+            local pp = posOf(d.Parent:IsA("Attachment") and d.Parent.Parent or d.Parent)
+            if pp and (pp - pos).Magnitude < bd then best, bd = d, (pp - pos).Magnitude end
+        end
+    end
+    return best
+end
+
+local function listAnimals()
+    local out, folder = {}, pickupsFolder()
+    if not folder then return out end
+    for _, a in ipairs(folder:GetChildren()) do
+        local pos = posOf(a)
+        if pos then
+            local rarity = readRarity(a) or (a:FindFirstChildWhichIsA("BasePart") and readRarity(a:FindFirstChildWhichIsA("BasePart")))
+            local mut = a:GetAttribute("Mutation")
+            if mut == nil then -- real layout: AnimalOverhead.Mutation TextLabel (visible only when mutated)
+                local ml = a:FindFirstChild("Mutation", true)
+                if ml and ml:IsA("TextLabel") and ml.Visible and ml.Text ~= "" then mut = ml.Text end
+            end
+            out[#out + 1] = { inst = a, pos = pos, rarity = rarity, mutation = (type(mut) == "string" and mut ~= "") and mut or "None",
+                              income = animalIncome(a) }
+        end
+    end
+    return out
+end
+
+local function setNonEmpty(t) return next(t) ~= nil end
+
+local function passesFilter(a)
+    local s = Settings.ST
+    if setNonEmpty(s.Rarity) and not (a.rarity and s.Rarity[a.rarity]) then return false end
+    if setNonEmpty(s.Mutation) and not s.Mutation[a.mutation:lower()] then return false end
+    if a.income < s.MinIncome then return false end
+    return true
+end
+
+local function pickStealTarget(skip)
+    local root = getRoot(); if not root then return end
+    local best
+    for _, a in ipairs(listAnimals()) do
+        if passesFilter(a) and not (skip and skip[a.inst]) then
+            a.dist = (a.pos - root.Position).Magnitude
+            a.rank = RANK[a.rarity or ""] or 0
+            if not best or a.income > best.income
+               or (a.income == best.income and (a.rank > best.rank
+               or (a.rank == best.rank and a.dist < best.dist))) then best = a end
+        end
+    end
+    return best
+end
+
+-- carrying heuristic: a non-pickaxe Tool in the character, or a Carrying attribute
+local function isCarrying()
+    local char = getChar(); if not char then return false end
+    if char:GetAttribute("Carrying") or LP:GetAttribute("Carrying") then return true end
+    local carried = Workspace:FindFirstChild("CarriedAnimals")
+    if carried then
+        for _, c in ipairs(carried:GetChildren()) do
+            if c:GetAttribute("OwnerUserId") == LP.UserId or c:GetAttribute("CarrierUserId") == LP.UserId
+               or c.Name:find(LP.Name, 1, true) then return true end
+        end
+    end
+    for _, t in ipairs(char:GetChildren()) do
+        if t:IsA("Tool") and not t.Name:lower():find(CONFIG.PickaxePattern) then return true end
+    end
+    return false
+end
+
+-- Safe Zone: Workspace.Build.ZoneHitboxes.SafeZone
+local function safeZonePos()
+    local b = Workspace:FindFirstChild("Build")
+    local zh = b and b:FindFirstChild("ZoneHitboxes")
+    local sz = zh and zh:FindFirstChild("SafeZone")
+    return posOf(sz or findNamed("safe", CONFIG.SafeZonePatterns))
+end
+-- START: own plot spawn = Workspace.Plots.Base_N (OwnerUserId == me) > SpawnPoint
+local function startPos()
+    local plots = Workspace:FindFirstChild("Plots")
+    if plots then
+        for _, base in ipairs(plots:GetChildren()) do
+            if base:GetAttribute("OwnerUserId") == LP.UserId then
+                return posOf(base:FindFirstChild("SpawnPoint") or base:FindFirstChild("Hitbox") or base)
+            end
+        end
+    end
+    return posOf(findNamed("start", CONFIG.StartPatterns))
+end
+-- Guard: nearest Model under ZoneBuilds that has a ChaseState attribute (Chicken, etc.)
+local function guardInst()
+    local root = getRoot()
+    local b = Workspace:FindFirstChild("Build")
+    local zb = b and b:FindFirstChild("ZoneBuilds")
+    if not zb then return end
+    local best, bd = nil, math.huge
+    for _, d in ipairs(zb:GetDescendants()) do
+        if d:IsA("Model") and d:GetAttribute("ChaseState") ~= nil then
+            local pos = posOf(d:FindFirstChild("BodyHitbox") or d)
+            local dist = (root and pos) and (pos - root.Position).Magnitude or math.huge
+            if dist < bd then best, bd = d, dist end
+        end
+    end
+    return best
+end
+
+local function goSafe(id, speed)
+    local p = safeZonePos()
+    if not p then statusST("Safe Zone not found"); return false end
+    return walkTo(ST, id, function() return p end, 3, speed)
+end
+
+------------------------------------------------------------------ AUTO STEAL (ST) : STEPS
+-- steal one animal by walking; returns "ok" | "lost"
+local function stealByWalking(id, a)
+    local s = Settings.ST
+    statusST("Walking to target")
+    if not walkTo(ST, id, function() return a.inst.Parent and posOf(a.inst) or nil end, 4, s.Speed) then
+        return "lost"
+    end
+    local prompt = animalPrompt(a.inst)
+    if not prompt then statusST("Steal prompt not found"); return "lost" end
+    statusST("Stealing")
+    for _ = 1, 5 do
+        if not alive(ST, id) then return "lost" end
+        firePrompt(prompt)
+        task.wait(0.4)
+        if isCarrying() or not a.inst.Parent then s.Collected += 1; return "ok" end
+    end
+    return "lost"
+end
+
+-- walk to the guard and take the hit, then continue
+local function handleGuard(id)
+    local g = guardInst()
+    if not g then return end
+    statusST("Guard: walking to guard")
+    walkTo(ST, id, function() return g.Parent and posOf(g) or nil end, 5, Settings.ST.Speed)
+    task.wait(0.8) -- take the hit
+end
+
+-- deliver at START; re-pick the animal if dropped
+local function deliver(id, a)
+    local s = Settings.ST
+    for _ = 1, 3 do
+        if not alive(ST, id) then return false end
+        local sp = startPos()
+        if not sp then statusST("START not found"); return false end
+        statusST("Delivering to START")
+        local arrived = walkTo(ST, id, function()
+            if not isCarrying() then return nil end -- dropped mid-way -> abort walk
+            return sp
+        end, 3, s.Speed)
+        if arrived then task.wait(0.5); return true end
+        if not isCarrying() then
+            -- dropped: pick it up again if it still exists, otherwise it is lost
+            if a.inst.Parent and animalPrompt(a.inst) then
+                statusST("Dropped - picking up again")
+                if stealByWalking(id, a) ~= "ok" then return false end
+                s.Collected -= 1 -- do not double count the re-pickup
+            else
+                statusST("Animal lost - next target")
+                return false
+            end
+        end
+    end
+    return false
+end
+
+-- TP MODE: smallest egg in the current zone -> break -> pick drop -> guard -> teleport to target
+local function smallestEggInZone()
+    local root = getRoot(); if not root then return end
+    local eggs = scanEggs(); if #eggs == 0 then return end
+    -- current zone = zone of the nearest egg
+    local nearest, nd = nil, math.huge
+    for _, e in ipairs(eggs) do
+        local d = (e.part.Position - root.Position).Magnitude
+        if d < nd then nearest, nd = e, d end
+    end
+    local best
+    for _, e in ipairs(eggs) do
+        if e.zone == nearest.zone then
+            e.dist = (e.part.Position - root.Position).Magnitude
+            if not best or e.size < best.size or (e.size == best.size and e.dist < best.dist) then best = e end
+        end
+    end
+    return best
+end
+
+local function tpModeSteal(id, a)
+    local s = Settings.ST
+    local okAll = pcall(function()
+        local egg = smallestEggInZone()
+        if not egg then error("no egg") end
+        statusST("Teleport: walking to an egg")
+        local stop = math.max(CONFIG.BreakStopDist, egg.half + CONFIG.BreakGap)
+        if not walkTo(ST, id, function() return eggAlive(egg) and egg.part.Position or nil end, stop, s.Speed) then
+            error("walk failed")
+        end
+        statusST("Teleport: breaking the egg")
+        Swing.acquire()
+        local t0 = os.clock()
+        while alive(ST, id) and eggAlive(egg) and os.clock() - t0 < 45 do task.wait(0.2) end
+        Swing.release()
+        if eggAlive(egg) then error("egg not broken") end
+        -- pick up the animal that dropped near the egg position
+        statusST("Teleport: picking up the dropped animal")
+        local picked = false
+        for _ = 1, 10 do
+            local near, nd = nil, 25
+            for _, an in ipairs(listAnimals()) do
+                local d = (an.pos - egg.part.Position).Magnitude
+                if d < nd then near, nd = an, d end
+            end
+            if near then
+                walkTo(ST, id, function() return near.inst.Parent and posOf(near.inst) or nil end, 4, s.Speed)
+                firePrompt(animalPrompt(near.inst)); task.wait(0.4)
+                if isCarrying() then picked = true; break end
+            end
+            task.wait(0.3)
+        end
+        if not picked then error("pickup failed") end
+        handleGuard(id)
+        -- teleport to the target with retries
+        statusST("Teleport: teleporting to target")
+        local ok2 = false
+        for _ = 1, 3 do
+            if not a.inst.Parent then break end
+            teleportTo(posOf(a.inst)); task.wait(0.3)
+            local root = getRoot()
+            if root and (root.Position - posOf(a.inst)).Magnitude < 10 then ok2 = true; break end
+        end
+        if not ok2 then error("tp failed") end
+        local prompt = animalPrompt(a.inst)
+        for _ = 1, 5 do firePrompt(prompt); task.wait(0.4); if isCarrying() then s.Collected += 1; break end end
+        -- teleport to START / Safe Zone to deliver
+        local sp = startPos() or safeZonePos()
+        if sp then teleportTo(sp); task.wait(0.5) end
+    end)
+    if not okAll then statusST("Teleport failed -> walking") end
+    return okAll
+end
+
+local function runSteal(id)
+    local s = Settings.ST
+    local ok, err = pcall(function()
+        local origin = getRoot() and getRoot().Position
+        statusST("Waiting for AnimalPickups")
+        while alive(ST, id) and not pickupsFolder() do task.wait(0.5) end
+        local skip = {}
+        while alive(ST, id) do
+            if not gateWait(ST, id) then break end
+            local target = pickStealTarget(skip)
+            if not target then
+                skip = {}
+                statusST("No target - Safe Zone, waiting for next round")
+                goSafe(id, s.Speed)
+                task.wait(2)
+            else
+                if s.SafeWait then
+                    statusST("Waiting in Safe Zone")
+                    goSafe(id, s.Speed); task.wait(1)
+                end
+                if not alive(ST, id) then break end
+                setBusy(true)
+                local result
+                if s.TpMode and tpModeSteal(id, target) then
+                    result = "ok"
+                else
+                    -- (fallback) normal walking
+                    result = stealByWalking(id, target)
+                    if result == "ok" then
+                        handleGuard(id)
+                        if not deliver(id, target) then result = "lost" end
+                    end
+                end
+                setBusy(false)
+                if result ~= "ok" then skip[target.inst] = true end
+                -- return to original spot (or Safe Zone)
+                if alive(ST, id) then
+                    statusST("Returning")
+                    if origin then walkTo(ST, id, function() return origin end, 3, s.Speed) else goSafe(id, s.Speed) end
+                end
+            end
+            task.wait(0.2)
+        end
+    end)
+    setBusy(false) -- always release controls, even after an error
+    if not ok then warn("[AutoSteal] " .. tostring(err)) end
+    return ok
+end
+
+------------------------------------------------------------------ START / STOP
+local function stopSystem(sys)
+    sys.Running = false
+    sys.Job += 1
+    if sys == ST then setBusy(false) end
+    if sys == SW and UI.ToggleSW then UI.ToggleSW(false) end
+    if sys == ST and UI.ToggleST then UI.ToggleST(false) end
+end
+
+local function startSystem(sys)
+    if sys == SW and not next(Settings.SW.Rarity) then
+        notice("Select a rarity first"); statusSW("Select a rarity first")
+        if UI.ToggleSW then UI.ToggleSW(false) end
+        return
+    end
+    sys.Job += 1
+    sys.Running = true
+    local id = sys.Job
+    task.spawn(function()
+        local ok
+        if sys == SW then ok = runBreak(id) else ok = runSteal(id) end
+        -- on error (or natural exit) of the current job: auto-stop + reset toggle
+        if sys.Job == id and sys.Running then stopSystem(sys) end
+        if sys == SW then statusSW(ok and "Stopped" or "Error - stopped (see console)")
+        else statusST(ok and "Stopped" or "Error - stopped (see console)") end
+    end)
+end
+
+------------------------------------------------------------------ GUI
+local theme = {
+    bg = Color3.fromRGB(24, 24, 32), panel = Color3.fromRGB(34, 34, 46), accent = Color3.fromRGB(255, 190, 70),
+    on = Color3.fromRGB(70, 200, 120), off = Color3.fromRGB(70, 70, 88), text = Color3.fromRGB(235, 235, 240),
+}
+
+local function mk(class, props, parent)
+    local o = Instance.new(class)
+    for k, v in pairs(props) do o[k] = v end
+    o.Parent = parent
+    return o
+end
+local function corner(o, r) mk("UICorner", { CornerRadius = UDim.new(0, r or 8) }, o) end
+
+local gui = mk("ScreenGui", { Name = "EggScriptGui", ResetOnSpawn = false, ZIndexBehavior = Enum.ZIndexBehavior.Sibling },
+    (gethui and gethui()) or CoreGui)
+
+local win = mk("Frame", { Size = UDim2.fromOffset(330, 470), Position = UDim2.new(0, 40, 0.5, -235),
+    BackgroundColor3 = theme.bg, BorderSizePixel = 0 }, gui)
+corner(win, 12)
+
+-- title bar (drag handle + minimize + close)
+local bar = mk("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundColor3 = theme.panel, BorderSizePixel = 0 }, win)
+corner(bar, 12)
+mk("TextLabel", { Size = UDim2.new(1, -80, 1, 0), Position = UDim2.fromOffset(12, 0), BackgroundTransparency = 1,
+    Text = "🥚 Break & Steal an Egg", TextColor3 = theme.accent, Font = Enum.Font.GothamBold, TextSize = 15,
+    TextXAlignment = Enum.TextXAlignment.Left }, bar)
+
+local body = mk("Frame", { Size = UDim2.new(1, 0, 1, -34), Position = UDim2.fromOffset(0, 34), BackgroundTransparency = 1,
+    ClipsDescendants = true }, win)
+
+local function barButton(txt, x, cb)
+    local b = mk("TextButton", { Size = UDim2.fromOffset(26, 22), Position = UDim2.new(1, x, 0, 6), Text = txt,
+        BackgroundColor3 = theme.off, TextColor3 = theme.text, Font = Enum.Font.GothamBold, TextSize = 14, AutoButtonColor = true }, bar)
+    corner(b, 6); b.MouseButton1Click:Connect(cb); return b
+end
+
+local minimized = false
+barButton("–", -62, function()
+    minimized = not minimized
+    body.Visible = not minimized
+    win.Size = minimized and UDim2.fromOffset(330, 34) or UDim2.fromOffset(330, 470)
+end)
+
+local conns = {}
+-- dragging
+do
+    local dragging, start, startPos
+    conns[#conns + 1] = bar.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging, start, startPos = true, i.Position, win.Position
+        end
+    end)
+    conns[#conns + 1] = UserInputService.InputChanged:Connect(function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            local d = i.Position - start
+            win.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        end
+    end)
+    conns[#conns + 1] = UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then dragging = false end
+    end)
+end
+
+-- tabs
+local tabBar = mk("Frame", { Size = UDim2.new(1, -16, 0, 28), Position = UDim2.fromOffset(8, 6), BackgroundTransparency = 1 }, body)
+mk("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }, tabBar)
+local pages, tabBtns = {}, {}
+local function showTab(name)
+    for n, p in pairs(pages) do p.Visible = (n == name) end
+    for n, b in pairs(tabBtns) do b.BackgroundColor3 = (n == name) and theme.accent or theme.off
+        b.TextColor3 = (n == name) and Color3.new(0, 0, 0) or theme.text end
+end
+local function makeTab(name)
+    local b = mk("TextButton", { Size = UDim2.new(0.5, -3, 1, 0), Text = name, Font = Enum.Font.GothamBold, TextSize = 13,
+        BackgroundColor3 = theme.off, TextColor3 = theme.text }, tabBar)
+    corner(b, 8); b.MouseButton1Click:Connect(function() showTab(name) end); tabBtns[name] = b
+    local p = mk("ScrollingFrame", { Size = UDim2.new(1, -16, 1, -44), Position = UDim2.fromOffset(8, 40), BackgroundTransparency = 1,
+        BorderSizePixel = 0, ScrollBarThickness = 4, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Visible = false }, body)
+    mk("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, p)
+    pages[name] = p; return p
+end
+
+-- widgets ------------------------------------------------------------
+local function toggle(parent, label, initial, onChange)
+    local row = mk("TextButton", { Size = UDim2.new(1, -6, 0, 30), BackgroundColor3 = theme.panel, Text = "", AutoButtonColor = false }, parent)
+    corner(row)
+    mk("TextLabel", { Size = UDim2.new(1, -60, 1, 0), Position = UDim2.fromOffset(10, 0), BackgroundTransparency = 1, Text = label,
+        TextColor3 = theme.text, Font = Enum.Font.Gotham, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left }, row)
+    local pill = mk("Frame", { Size = UDim2.fromOffset(40, 18), Position = UDim2.new(1, -50, 0.5, -9), BackgroundColor3 = theme.off }, row)
+    corner(pill, 9)
+    local knob = mk("Frame", { Size = UDim2.fromOffset(14, 14), Position = UDim2.fromOffset(2, 2), BackgroundColor3 = Color3.new(1, 1, 1) }, pill)
+    corner(knob, 7)
+    local state = initial
+    local function set(v, silent)
+        state = v
+        pill.BackgroundColor3 = v and theme.on or theme.off
+        knob.Position = v and UDim2.fromOffset(24, 2) or UDim2.fromOffset(2, 2)
+        if not silent and onChange then onChange(v) end
+    end
+    row.MouseButton1Click:Connect(function() set(not state) end)
+    set(initial, true)
+    return function(v) set(v, true) end -- external setter (does not fire onChange)
+end
+
+local function textBox(parent, label, default, onChange)
+    local row = mk("Frame", { Size = UDim2.new(1, -6, 0, 30), BackgroundColor3 = theme.panel }, parent); corner(row)
+    mk("TextLabel", { Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.fromOffset(10, 0), BackgroundTransparency = 1, Text = label,
+        TextColor3 = theme.text, Font = Enum.Font.Gotham, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left }, row)
+    local box = mk("TextBox", { Size = UDim2.new(0.45, -8, 0, 22), Position = UDim2.new(0.55, 0, 0.5, -11), BackgroundColor3 = theme.bg,
+        Text = tostring(default), PlaceholderText = "", TextColor3 = theme.accent, Font = Enum.Font.GothamMedium, TextSize = 13,
+        ClearTextOnFocus = false }, row); corner(box, 6)
+    box.FocusLost:Connect(function() onChange(box.Text) end)
+    return box
+end
+
+local function chips(parent, title, names, set, onChange)
+    local box = mk("Frame", { Size = UDim2.new(1, -6, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundColor3 = theme.panel }, parent)
+    corner(box)
+    mk("UIPadding", { PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, box)
+    local lay = mk("UIListLayout", { Padding = UDim.new(0, 4) }, box)
+    mk("TextLabel", { Size = UDim2.new(1, 0, 0, 16), BackgroundTransparency = 1, Text = title, TextColor3 = theme.text,
+        Font = Enum.Font.GothamBold, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left }, box)
+    local grid = mk("Frame", { Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1 }, box)
+    mk("UIGridLayout", { CellSize = UDim2.new(0.333, -4, 0, 22), CellPadding = UDim2.fromOffset(4, 4) }, grid)
+    for _, n in ipairs(names) do
+        local b = mk("TextButton", { Text = n, Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = theme.text, BackgroundColor3 = theme.off }, grid)
+        corner(b, 6)
+        local function paint() b.BackgroundColor3 = set[n] and theme.accent or theme.off; b.TextColor3 = set[n] and Color3.new(0, 0, 0) or theme.text end
+        b.MouseButton1Click:Connect(function() set[n] = (not set[n]) or nil; paint(); if onChange then onChange() end end)
+        paint()
+    end
+end
+
+local function statusLabel(parent)
+    return mk("TextLabel", { Size = UDim2.new(1, -6, 0, 40), BackgroundColor3 = theme.bg, Text = "Idle", TextWrapped = true,
+        TextColor3 = theme.accent, Font = Enum.Font.GothamMedium, TextSize = 12, BorderSizePixel = 0 }, parent)
+end
+
+-- AUTO BREAK page -------------------------------------------------------
+local pSW = makeTab("Auto Break")
+UI.ToggleSW = toggle(pSW, "Auto Break", false, function(v) if v then startSystem(SW) else stopSystem(SW) end end)
+UI.StatusSW = statusLabel(pSW)
+textBox(pSW, "Speed", Settings.SW.Speed, function(t) Settings.SW.Speed = math.clamp(tonumber(t) or 150, 10, 400) end)
+chips(pSW, "Rarity (select at least one)", CONFIG.Rarities, Settings.SW.Rarity)
+
+-- AUTO STEAL page -------------------------------------------------------
+local pST = makeTab("Auto Steal")
+UI.ToggleST = toggle(pST, "Auto Steal", false, function(v) if v then startSystem(ST) else stopSystem(ST) end end)
+UI.StatusST = statusLabel(pST)
+toggle(pST, "Noclip while busy", Settings.ST.Noclip, function(v) Settings.ST.Noclip = v end)
+toggle(pST, "Safe Wait (wait in Safe Zone)", Settings.ST.SafeWait, function(v) Settings.ST.SafeWait = v end)
+toggle(pST, "Anti-Ragdoll", Settings.ST.AntiRagdoll, function(v) Settings.ST.AntiRagdoll = v end)
+toggle(pST, "TP Mode (falls back to walking)", Settings.ST.TpMode, function(v) Settings.ST.TpMode = v end)
+textBox(pST, "Speed", Settings.ST.Speed, function(t) Settings.ST.Speed = math.clamp(tonumber(t) or 150, 10, 400) end)
+textBox(pST, "Min income /s (e.g. 5M)", 0, function(t) Settings.ST.MinIncome = parseNumber(t) end)
+textBox(pST, "Mutations (comma, empty=any)", "", function(t)
+    Settings.ST.Mutation = {}
+    for m in t:gmatch("[^,]+") do Settings.ST.Mutation[(m:gsub("^%s+", ""):gsub("%s+$", "")):lower()] = true end
+end)
+chips(pST, "Rarity filter (none = any)", CONFIG.Rarities, Settings.ST.Rarity)
+
+statusSW("Idle")
+statusST("Idle")
+showTab("Auto Break")
+
+------------------------------------------------------------------ CLEANUP (re-execute / close)
+local function cleanup()
+    stopSystem(SW); stopSystem(ST)
+    Swing.refs = 0; Swing.monitorJob += 1
+    for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
+    pcall(function() ContextActionService:UnbindAction("ST_Lock") end)
+    pcall(function() gui:Destroy() end)
+    ENV.__BSE_Cleanup = nil
+end
+ENV.__BSE_Cleanup = cleanup
+barButton("✕", -30, cleanup)
+
+-- character respawn: make sure controls are never left locked
+conns[#conns + 1] = LP.CharacterAdded:Connect(function()
+    Busy.collide = {}
+    if Settings.ST.Busy then setBusy(false) end
+end)
