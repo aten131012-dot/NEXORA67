@@ -1,0 +1,749 @@
+-- NEXORA Halloween AFK | พาร์ท 1/5: GUI
+local TS=game:GetService("TweenService")
+local CoreGui=game:GetService("CoreGui")
+local lp=game:GetService("Players").LocalPlayer
+local env=(getgenv and getgenv()) or _G
+
+local OLD=env.NX_HW
+if OLD then
+	OLD.Active=false
+	pcall(function() OLD.Gui:Destroy() end)
+	for _,k in ipairs({"StepConn","IdleConn","RenderConn"}) do
+		pcall(function() OLD[k]:Disconnect() end)
+	end
+end
+local HW={Active=false,Status="รอเริ่ม",Scene=(OLD and OLD.Scene) or 1,ringK=1}
+env.NX_HW=HW
+
+HW.CFG={
+	Keywords={"trick","treat","house"},
+	Exclude={"stage","haunted","castle","graveyard"},
+	KnockCooldown=60,HouseSpeed=120,FarmSpeed=350,
+	Gap=1.2,SinkDown=10,OpenTimeout=3,AfterWait=1.2,
+}
+
+local function C(r,g,b) return Color3.fromRGB(r,g,b) end
+local function corner(o,r) local c=Instance.new("UICorner") c.CornerRadius=UDim.new(0,r) c.Parent=o end
+local function stroke(o,col,t) local s=Instance.new("UIStroke") s.Color=col s.Thickness=t s.Parent=o return s end
+local function mk(cls,props,parent)
+	local o=Instance.new(cls)
+	for k,v in pairs(props) do o[k]=v end
+	o.Parent=parent
+	return o
+end
+HW.U={C=C,corner=corner,stroke=stroke,mk=mk}
+
+local gui=mk("ScreenGui",{Name="NEXORA_HW",ResetOnSpawn=false,IgnoreGuiInset=true,DisplayOrder=999})
+pcall(function() gui.Parent=CoreGui end)
+if not gui.Parent then gui.Parent=lp:WaitForChild("PlayerGui") end
+HW.Gui=gui
+
+local btn=mk("TextButton",{Size=UDim2.new(0,78,0,46),Position=UDim2.new(1,-88,0.5,-23),
+	BackgroundColor3=C(20,10,30),Text="🎃 AFK",TextColor3=C(255,140,0),
+	Font=Enum.Font.GothamBlack,TextSize=16},gui)
+corner(btn,12) stroke(btn,C(255,120,0),2)
+
+local ov=mk("Frame",{Size=UDim2.new(1,0,1,0),BackgroundColor3=C(12,4,22),
+	BackgroundTransparency=1,Visible=false,Active=true,ClipsDescendants=true},gui)
+local vf=mk("ViewportFrame",{Size=UDim2.new(1,0,1,0),BackgroundColor3=C(10,10,20),Visible=false,ZIndex=1},ov)
+local cam=mk("Camera",{},vf)
+vf.CurrentCamera=cam
+local world=mk("Model",{},vf)
+
+mk("Frame",{Size=UDim2.new(1,0,0.13,0),BackgroundColor3=C(0,0,0),BorderSizePixel=0,ZIndex=3},ov)
+local bb=mk("Frame",{Size=UDim2.new(1,0,0.13,0),Position=UDim2.new(0,0,0.87,0),BackgroundColor3=C(0,0,0),BorderSizePixel=0,ZIndex=3},ov)
+local fl=mk("Frame",{Size=UDim2.new(1,0,1,0),BackgroundColor3=C(255,255,255),BackgroundTransparency=1,BorderSizePixel=0,ZIndex=4},ov)
+
+local title=mk("TextLabel",{Size=UDim2.new(0.45,0,0.13,0),Position=UDim2.new(0.02,0,0,0),BackgroundTransparency=1,
+	TextXAlignment=Enum.TextXAlignment.Left,Font=Enum.Font.GothamBlack,TextSize=15,
+	TextColor3=C(255,170,0),Text="",ZIndex=7},ov)
+local stat=mk("TextLabel",{Size=UDim2.new(0.5,0,0.13,0),Position=UDim2.new(0.48,0,0,0),BackgroundTransparency=1,
+	TextXAlignment=Enum.TextXAlignment.Right,Font=Enum.Font.GothamBold,TextSize=13,
+	TextColor3=C(255,210,140),Text="",ZIndex=7},ov)
+
+local center=mk("Frame",{Size=UDim2.new(0,0,0,0),Position=UDim2.new(0.5,0,0.5,0),BackgroundTransparency=1,ZIndex=6},ov)
+local rings={}
+for i=1,3 do
+	local f=mk("Frame",{AnchorPoint=Vector2.new(0.5,0.5),BackgroundTransparency=1,ZIndex=6},center)
+	corner(f,999)
+	local g=mk("UIGradient",{Color=ColorSequence.new{
+		ColorSequenceKeypoint.new(0,C(255,120,0)),
+		ColorSequenceKeypoint.new(0.5,C(150,60,255)),
+		ColorSequenceKeypoint.new(1,C(255,120,0))}},stroke(f,C(255,255,255),3))
+	rings[i]={f=f,g=g,d=(i%2==0) and -1 or 1,base=150+i*70}
+end
+local t=mk("TextLabel",{AnchorPoint=Vector2.new(0.5,0.5),Size=UDim2.new(0,300,0,120),BackgroundTransparency=1,
+	Text="AFK",Font=Enum.Font.GothamBlack,TextSize=90,TextColor3=C(255,255,255),ZIndex=8},center)
+local ts=stroke(t,C(255,120,0),4)
+local tg=mk("UIGradient",{Color=ColorSequence.new{
+	ColorSequenceKeypoint.new(0,C(255,170,0)),ColorSequenceKeypoint.new(1,C(190,80,255))}},t)
+
+local sceneBtn=mk("TextButton",{Size=UDim2.new(0,150,0,34),Position=UDim2.new(0.02,0,0.5,-17),
+	BackgroundColor3=C(90,40,160),Text="🎬 เลือกซีน",TextColor3=C(255,255,255),
+	Font=Enum.Font.GothamBold,TextSize=14,ZIndex=8},bb)
+corner(sceneBtn,10)
+local stop=mk("TextButton",{AnchorPoint=Vector2.new(1,0),Size=UDim2.new(0,130,0,34),Position=UDim2.new(0.98,0,0.5,-17),
+	BackgroundColor3=C(180,30,30),Text="หยุด AFK",TextColor3=C(255,255,255),
+	Font=Enum.Font.GothamBold,TextSize=14,ZIndex=8},bb)
+corner(stop,10)
+
+local panel=mk("Frame",{AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.new(0.5,0,0.5,0),
+	Size=UDim2.new(0,320,0.82,0),BackgroundColor3=C(14,8,22),Visible=false,ZIndex=20},ov)
+corner(panel,14) stroke(panel,C(255,120,0),2)
+mk("TextLabel",{Size=UDim2.new(1,0,0,36),BackgroundTransparency=1,Text="🎬 เลือกซีนตอน AFK",
+	Font=Enum.Font.GothamBlack,TextSize=16,TextColor3=C(255,170,0),ZIndex=21},panel)
+local list=mk("ScrollingFrame",{Size=UDim2.new(1,-16,1,-46),Position=UDim2.new(0,8,0,40),BackgroundTransparency=1,
+	ScrollBarThickness=4,AutomaticCanvasSize=Enum.AutomaticSize.Y,CanvasSize=UDim2.new(),
+	BorderSizePixel=0,ZIndex=21},panel)
+mk("UIListLayout",{Padding=UDim.new(0,6)},list)
+
+local icons={"🎃","🦇","👻","🕷️","💀","✨"}
+HW.spawnP=function()
+	local p=mk("TextLabel",{BackgroundTransparency=1,Text=icons[math.random(#icons)],
+		TextSize=math.random(18,36),ZIndex=5,Position=UDim2.new(math.random(),0,1.05,0),
+		Size=UDim2.new(0,40,0,40)},ov)
+	local tw=TS:Create(p,TweenInfo.new(math.random(30,55)/10,Enum.EasingStyle.Sine),{
+		Position=UDim2.new(math.random(),0,-0.1,0),TextTransparency=1,Rotation=math.random(-180,180)})
+	tw:Play()
+	tw.Completed:Connect(function() p:Destroy() end)
+end
+HW.flash=function(a)
+	fl.BackgroundTransparency=1-a
+	TS:Create(fl,TweenInfo.new(0.25),{BackgroundTransparency=1}):Play()
+end
+
+HW.UI={gui=gui,btn=btn,ov=ov,vf=vf,cam=cam,world=world,title=title,stat=stat,
+	center=center,rings=rings,t=t,ts=ts,tg=tg,sceneBtn=sceneBtn,stop=stop,panel=panel,list=list}-- NEXORA Halloween AFK | พาร์ท 2/5: ข้อมูลซีน
+local env=(getgenv and getgenv()) or _G
+local HW=env.NX_HW
+if not HW or not HW.UI then warn("รันพาร์ท 1 ก่อน") return end
+local C=HW.U.C
+
+-- A/B = {สีตัว, สีเรืองแสง, ขนาด, สไตล์}  สไตล์: punch sword laser kick rocket mix
+-- env: pil={จำนวน,สูงต่ำสุด,สูงสุด,สี,เอียง,มีแถบนีออน} stars planet cracks sun
+HW.SC={
+{n="TITAN CLASH",d="ต่อยกลางเมืองกลางคืน",sky=C(8,12,28),gr=C(30,34,44),neon=C(0,200,255),
+ A={C(170,25,25),C(255,200,60),1,"punch"},B={C(30,70,170),C(210,230,255),1,"punch"},
+ env={pil={26,40,120,C(18,22,34),0,true}},wx={"up",C(255,150,50)},shots={1,2,3,4,5,6}},
+{n="STEEL DUEL",d="ดวลดาบกลางซากเมือง",sky=C(24,12,10),gr=C(36,30,28),neon=C(255,140,30),
+ A={C(170,175,185),C(0,230,255),1,"sword"},B={C(28,28,34),C(255,40,40),1,"sword"},
+ env={pil={22,25,70,C(40,34,30),0.3,false},sun=C(255,90,30)},wx={"up",C(255,80,40)},shots={2,1,4,6,3,5}},
+{n="COLOSSUS",d="หุ่นยักษ์ ปะทะ หุ่นเลเซอร์",sky=C(14,6,28),gr=C(26,22,40),neon=C(255,60,220),
+ A={C(90,70,25),C(255,190,40),2.4,"punch"},B={C(60,60,70),C(255,60,60),1,"laser"},
+ env={pil={26,60,150,C(20,14,34),0,true}},wx={"rain",C(150,170,255)},shots={5,2,1,6,4,3}},
+{n="NEON STRIKE",d="ศึกเตะไซเบอร์พังก์",sky=C(6,4,20),gr=C(14,12,28),neon=C(0,255,220),
+ A={C(230,230,240),C(255,60,200),1,"kick"},B={C(20,20,26),C(0,255,220),1,"kick"},
+ env={pil={30,40,130,C(16,12,30),0,true},cracks=C(255,60,200)},wx={"star",C(255,120,255)},shots={3,6,1,2,4,5}},
+{n="LASER STORM",d="ยิงเลเซอร์กลางอวกาศ",sky=C(2,2,10),gr=C(20,22,30),neon=C(80,200,255),
+ A={C(40,90,160),C(80,200,255),1,"laser"},B={C(150,40,40),C(255,120,60),1,"laser"},
+ env={stars=true,planet=C(70,90,200)},wx={"star",C(200,220,255)},shots={1,4,2,5,6,3}},
+{n="LAVA RAGE",d="จรวดและหมัดเหนือลาวา",sky=C(30,8,4),gr=C(30,14,10),neon=C(255,100,20),
+ A={C(120,30,20),C(255,110,20),1,"rocket"},B={C(50,50,56),C(255,200,60),1,"punch"},
+ env={cracks=C(255,100,20),sun=C(255,70,10),pil={14,30,80,C(30,16,12),0.2,false}},wx={"up",C(255,100,20)},shots={2,3,6,1,5,4}},
+{n="ICE BREAKER",d="ดาบกับหมัดบนน้ำแข็ง",sky=C(120,150,185),gr=C(190,210,225),neon=C(120,230,255),
+ A={C(200,215,230),C(80,190,255),1,"sword"},B={C(30,50,90),C(120,230,255),1,"punch"},
+ env={pil={24,50,120,C(200,225,240),0.1,false}},wx={"down",C(255,255,255)},shots={4,1,3,6,2,5}},
+{n="DESERT WAR",d="ยิงจรวดกลางทะเลทราย",sky=C(200,140,80),gr=C(170,130,80),neon=C(255,200,80),
+ A={C(90,100,60),C(255,200,50),1,"rocket"},B={C(80,80,85),C(255,70,40),1,"rocket"},
+ env={pil={16,15,50,C(110,80,50),0.15,false},sun=C(255,200,120)},wx={"star",C(230,200,150)},shots={3,2,1,5,4,6}},
+{n="GHOST PROTOCOL",d="ศึกฮาโลวีน ดาบ vs เตะ",sky=C(22,6,34),gr=C(26,18,30),neon=C(255,130,0),
+ A={C(60,20,80),C(255,130,0),1,"sword"},B={C(20,20,24),C(150,255,80),1,"kick"},
+ env={pil={24,30,90,C(30,16,40),0.3,true},sun=C(255,140,30)},wx={"up",C(255,130,20)},shots={1,2,6,3,4,5}},
+{n="OMEGA FINALE",d="ศึกตัดสิน ใช้ทุกท่า",sky=C(8,4,12),gr=C(20,16,24),neon=C(255,0,60),
+ A={C(230,200,90),C(255,255,255),1.2,"mix"},B={C(15,15,20),C(255,0,60),1.2,"mix"},
+ env={stars=true,planet=C(160,30,50),pil={18,50,110,C(18,12,22),0.1,true}},wx={"up",C(255,50,80)},shots={6,2,1,4,3,5}},
+}-- NEXORA Halloween AFK | พาร์ท 3/5: ซีน 3D
+local env=(getgenv and getgenv()) or _G
+local HW=env.NX_HW
+if not HW or not HW.SC then warn("รันพาร์ท 1 และ 2 ก่อน") return end
+local TS=game:GetService("TweenService")
+local C=HW.U.C
+local UI=HW.UI
+local vf,cam,world,center,title=UI.vf,UI.cam,UI.world,UI.center,UI.title
+local SC=HW.SC
+
+local ST={T=0,fx={},wx={},shake=0,hitN=-1,lastHit=-9}
+local ROOTY,CL=8.9,2.6
+local MIX={"punch","sword","laser","kick","rocket"}
+
+local function part(parent,size,cf,col,mat,neon)
+	local p=Instance.new("Part")
+	p.Anchored=true p.CanCollide=false p.CanTouch=false p.CanQuery=false
+	p.Size=size p.CFrame=cf p.Color=col
+	p.Material=neon and Enum.Material.Neon or (mat or Enum.Material.Metal)
+	p.TopSurface=Enum.SurfaceType.Smooth p.BottomSurface=Enum.SurfaceType.Smooth
+	p.Parent=parent
+	return p
+end
+
+local function clearScene()
+	world:ClearAllChildren()
+	ST.sc=nil ST.fx={} ST.wx={}
+	vf.Visible=false
+end
+
+local function buildEnv(sc)
+	vf.BackgroundColor3=sc.sky
+	vf.Ambient=sc.sky:Lerp(C(255,255,255),0.4)
+	vf.LightColor=C(255,255,255)
+	vf.LightDirection=Vector3.new(-0.5,-1,-0.4)
+	part(world,Vector3.new(600,1,600),CFrame.new(0,-0.5,0),sc.gr,Enum.Material.Concrete)
+	local r1=part(world,Vector3.new(0.3,74,74),CFrame.new(0,0.05,0)*CFrame.Angles(0,0,math.rad(90)),sc.neon,nil,true)
+	r1.Shape=Enum.PartType.Cylinder
+	local r2=part(world,Vector3.new(0.3,70,70),CFrame.new(0,0.12,0)*CFrame.Angles(0,0,math.rad(90)),sc.gr,Enum.Material.Metal)
+	r2.Shape=Enum.PartType.Cylinder
+	local e=sc.env
+	if e.pil then
+		local n,hmin,hmax,col,tilt,win=table.unpack(e.pil)
+		for i=1,n do
+			local a=math.random()*math.pi*2
+			local r=110+math.random()*70
+			local h=hmin+math.random()*(hmax-hmin)
+			local w=10+math.random()*14
+			local cf=CFrame.new(math.cos(a)*r,h/2,math.sin(a)*r)*CFrame.Angles((math.random()-0.5)*tilt,math.random()*6,(math.random()-0.5)*tilt)
+			part(world,Vector3.new(w,h,w),cf,col,Enum.Material.Concrete)
+			if win then
+				part(world,Vector3.new(w+0.3,1.2,w+0.3),cf*CFrame.new(0,(math.random()-0.5)*h*0.8,0),sc.neon,nil,true)
+			end
+		end
+	end
+	if e.stars then
+		for i=1,140 do
+			local d=Vector3.new(math.random()-0.5,math.random()*0.8+0.05,math.random()-0.5).Unit*380
+			part(world,Vector3.new(1.6,1.6,1.6),CFrame.new(d),C(255,255,255),nil,true)
+		end
+	end
+	if e.planet then
+		local pl=part(world,Vector3.new(150,150,150),CFrame.new(-120,95,-270),e.planet,Enum.Material.SmoothPlastic)
+		pl.Shape=Enum.PartType.Ball
+	end
+	if e.cracks then
+		for i=1,32 do
+			local a=math.random()*math.pi*2
+			local r=22+math.random()*80
+			part(world,Vector3.new(0.6,0.1,10+math.random()*20),
+				CFrame.new(math.cos(a)*r,0.15,math.sin(a)*r)*CFrame.Angles(0,math.random()*6,0),e.cracks,nil,true)
+		end
+	end
+	if e.sun then
+		for _,sx in ipairs({-1,1}) do
+			local s=part(world,Vector3.new(90,90,90),CFrame.new(sx*60,75,-320*sx),e.sun,nil,true)
+			s.Shape=Enum.PartType.Ball
+		end
+	end
+	local wk,wc=sc.wx[1],sc.wx[2]
+	for i=1,45 do
+		local sz=(wk=="rain") and Vector3.new(0.15,4,0.15) or Vector3.new(0.5,0.5,0.5)
+		local p=part(world,sz,CFrame.new(math.random(-90,90),math.random(0,70),math.random(-90,90)),wc,nil,true)
+		local v
+		if wk=="up" then v=Vector3.new(math.random(-2,2),math.random(6,14),math.random(-2,2))
+		elseif wk=="down" then v=Vector3.new(math.random(-3,3),-math.random(4,9),math.random(-3,3))
+		elseif wk=="rain" then v=Vector3.new(0,-80,0)
+		else v=Vector3.new(math.random(-4,4),math.random(-1,1),math.random(-4,4)) end
+		ST.wx[i]={p=p,v=v}
+	end
+end
+
+local function newMech(col,acc,s,style)
+	local m={s=s,acc=acc,style=style}
+	local dk=col:Lerp(C(0,0,0),0.45)
+	local function P(n,sz,c,neon) m[n]=part(world,sz*s,CFrame.new(),c,nil,neon) end
+	P("torso",Vector3.new(4,4.2,2.4),col)
+	P("chest",Vector3.new(3,1.6,0.4),dk)
+	P("core",Vector3.new(0.9,0.9,0.3),acc,true)
+	P("hip",Vector3.new(3,1,2),dk)
+	P("head",Vector3.new(1.8,1.8,1.8),col)
+	P("visor",Vector3.new(1.5,0.45,0.2),acc,true)
+	P("crest",Vector3.new(0.4,1,1.8),acc)
+	P("pack",Vector3.new(2.8,3,1),dk)
+	P("glow",Vector3.new(1.6,0.5,0.3),acc,true)
+	for _,k in ipairs({"L","R"}) do
+		P("sp"..k,Vector3.new(1.9,1.9,2.2),col)
+		P("up"..k,Vector3.new(1,2.2,1),dk)
+		P("fo"..k,Vector3.new(1.1,2.4,1.1),col)
+		P("fist"..k,Vector3.new(1.2,1.2,1.2),dk)
+		P("th"..k,Vector3.new(1.3,2.6,1.5),col)
+		P("sh"..k,Vector3.new(1.2,2.8,1.3),dk)
+		P("ft"..k,Vector3.new(1.4,0.5,2.4),dk)
+	end
+	P("blade",Vector3.new(0.35,0.9,5.8),acc,true)
+	P("beam",Vector3.new(0.7,0.7,1),acc,true)
+	P("proj",Vector3.new(1,1,1),acc,true)
+	m.proj.Shape=Enum.PartType.Ball
+	m.blade.Transparency=1 m.beam.Transparency=1 m.proj.Transparency=1
+	return m
+end
+
+local function setPose(m,cf,P)
+	local s=m.s
+	local tc=cf*CFrame.Angles(P.lean,0,0)
+	local function put(n,c) m[n].CFrame=c end
+	put("torso",tc)
+	put("chest",tc*CFrame.new(0,0.6*s,-1.3*s))
+	put("core",tc*CFrame.new(0,0.6*s,-1.5*s))
+	put("hip",cf*CFrame.new(0,-2.6*s,0))
+	put("head",tc*CFrame.new(0,3.2*s,-0.1*s))
+	put("visor",tc*CFrame.new(0,3.3*s,-1.0*s))
+	put("crest",tc*CFrame.new(0,4.3*s,0.2*s))
+	put("pack",tc*CFrame.new(0,0.4*s,1.6*s))
+	put("glow",tc*CFrame.new(0,-0.9*s,2.15*s))
+	for _,sd in ipairs({-1,1}) do
+		local k=(sd<0) and "L" or "R"
+		local sh=tc*CFrame.new(sd*2.9*s,1.6*s,0)
+		put("sp"..k,sh*CFrame.new(0,0.3*s,0))
+		local o1=sh*CFrame.Angles(P["a"..k],0,sd*0.12)
+		put("up"..k,o1*CFrame.new(0,-1.1*s,0))
+		local o2=o1*CFrame.new(0,-2.2*s,0)*CFrame.Angles(P["b"..k],0,0)
+		put("fo"..k,o2*CFrame.new(0,-1.2*s,0))
+		put("fist"..k,o2*CFrame.new(0,-2.8*s,0))
+		if sd==1 then m.o2R=o2 end
+		local hp=cf*CFrame.new(sd*1.0*s,-3.1*s,0)
+		local h1=hp*CFrame.Angles(P["l"..k],0,sd*0.07)
+		put("th"..k,h1*CFrame.new(0,-1.3*s,0))
+		local h2=h1*CFrame.new(0,-2.6*s,0)*CFrame.Angles(-P["k"..k],0,0)
+		put("sh"..k,h2*CFrame.new(0,-1.4*s,0))
+		put("ft"..k,h2*CFrame.new(0,-2.95*s,-0.5*s))
+	end
+	m.blade.CFrame=m.o2R*CFrame.new(0,-2.8*s,-3.1*s)
+end
+
+local function curve(p)
+	if p<0.45 then return -0.6*math.sin(p/0.45*math.pi/2)
+	elseif p<0.6 then return -0.6+1.6*((p-0.45)/0.15)
+	else return 1-((p-0.6)/0.4) end
+end
+
+local function basePose(tt)
+	return {lean=0.12,aL=0.9+math.sin(tt*2)*0.05,bL=1.5,aR=0.9+math.sin(tt*2+1)*0.05,bR=1.5,
+		lL=0.35,kL=0.3,lR=-0.25,kR=0.25}
+end
+
+local function attackPose(P,style,u,p,k)
+	if style=="punch" then
+		P["a"..k]=0.3+u*1.2 P["b"..k]=1.2*(1-math.max(u,0))
+		P.lean=0.12+u*0.3 P.lL=0.35+u*0.25
+	elseif style=="sword" then
+		P.aR=2.5-u*1.2 P.bR=0.2 P.aL=0.6 P.bL=1.0 P.lean=0.1+u*0.35
+	elseif style=="laser" then
+		if p>0.2 then P.aL=1.45 P.bL=0.15 P.aR=1.45 P.bR=0.15 end
+		P.lean=-0.08
+	elseif style=="kick" then
+		P.lR=0.2+u*1.4 P.kR=1.3*(1-math.max(u,0))+0.1 P.lean=-u*0.3
+		P.aL=-0.5 P.bL=0.6 P.aR=0.8 P.bR=1.0
+	elseif style=="rocket" then
+		if p>0.12 then P.aR=1.35 P.bR=0.2 end
+		P.lean=-0.05
+	end
+end
+
+local function doHit(atk,def,dirv)
+	ST.lastHit=ST.T ST.lastDef=def
+	local at=def.torso.Position+Vector3.new(0,0.8*def.s,0)-dirv*1.4*def.s
+	for i=1,26 do
+		local sp=part(world,Vector3.new(0.25,0.25,1.2)*(0.6+atk.s*0.4),CFrame.new(at),
+			(i%3==0) and C(255,255,255) or atk.acc,nil,true)
+		local v=(Vector3.new(math.random()-0.5,math.random()*0.8,math.random()-0.5).Unit)*(20+math.random()*35)*atk.s
+		table.insert(ST.fx,{p=sp,v=v,t0=ST.T,dur=0.5,kind="spark"})
+	end
+	local b=part(world,Vector3.new(2,2,2)*def.s,CFrame.new(at),C(255,255,255),nil,true)
+	b.Shape=Enum.PartType.Ball
+	table.insert(ST.fx,{p=b,t0=ST.T,dur=0.4,kind="ball",s=def.s})
+	HW.flash(0.55)
+	ST.shake=1
+end
+
+local function stepScene(dt)
+	local sc=ST.sc
+	if not sc then return end
+	ST.T+=dt
+	local T=ST.T
+	local A,B=ST.A,ST.B
+	local D=6*(A.s+B.s)
+	local n=math.floor(T/CL)
+	local p=math.clamp(((T%CL)/CL)/0.72,0,1)
+	local atk,def,dirv=A,B,Vector3.new(1,0,0)
+	if n%2==1 then atk,def,dirv=B,A,Vector3.new(-1,0,0) end
+	local PA,PB=basePose(T),basePose(T+1.3)
+	local PAt,PDf=PA,PB
+	if atk==B then PAt,PDf=PB,PA end
+	local u=curve(p)
+	local style=atk.style
+	if style=="mix" then style=MIX[(n*3+1)%#MIX+1] end
+	attackPose(PAt,style,u,p,(math.floor(n/2)%2==0) and "R" or "L")
+	if p>=0.55 and ST.hitN~=n then ST.hitN=n doHit(atk,def,dirv) end
+	local kk=T-ST.lastHit
+	local r=(ST.lastDef==def) and math.max(0,1-kk/0.55) or 0
+	if r>0 then
+		PDf.lean=-0.55*r+0.12*(1-r)
+		PDf.aL+=0.7*r PDf.aR+=0.5*r
+	end
+	local function off(m)
+		if m==atk then return dirv*D*0.2*math.sin(p*math.pi) end
+		if ST.lastDef==m then return dirv*3.5*m.s*math.sin(math.min(kk/0.6,1)*math.pi) end
+		return Vector3.new(0,0,0)
+	end
+	local bob=math.sin(T*3)*0.12
+	local pa=Vector3.new(-D/2,(ROOTY+bob)*A.s,0)+off(A)
+	local pb=Vector3.new(D/2,(ROOTY-bob)*B.s,0)+off(B)
+	setPose(A,CFrame.lookAt(pa,pa+Vector3.new(1,0,0)),PA)
+	setPose(B,CFrame.lookAt(pb,pb+Vector3.new(-1,0,0)),PB)
+	for _,m in ipairs({A,B}) do
+		local sw=(m.style=="sword") or (m.style=="mix" and m==atk and style=="sword")
+		m.blade.Transparency=sw and 0 or 1
+		m.beam.Transparency=1 m.proj.Transparency=1
+	end
+	if style=="laser" and p>0.4 and p<0.78 then
+		local a0=atk.fistR.Position
+		local b0=def.torso.Position+Vector3.new(0,0.5*def.s,0)
+		local len=(b0-a0).Magnitude
+		atk.beam.Size=Vector3.new(0.7*atk.s,0.7*atk.s,len)
+		atk.beam.CFrame=CFrame.lookAt(a0,b0)*CFrame.new(0,0,-len/2)
+		atk.beam.Transparency=0.1+0.5*math.random()
+	elseif style=="rocket" and p>0.2 and p<0.55 then
+		local a0=atk.fistR.Position
+		local b0=def.torso.Position
+		local q=math.clamp((p-0.3)/0.25,0,1)
+		local sz=(0.8+0.8*math.min((p-0.2)/0.1,1))*atk.s
+		atk.proj.Size=Vector3.new(sz,sz,sz)
+		atk.proj.Position=a0:Lerp(b0,q)
+		atk.proj.Transparency=0
+	end
+	for i=#ST.fx,1,-1 do
+		local f=ST.fx[i]
+		local a=(T-f.t0)/f.dur
+		if a>=1 then
+			f.p:Destroy() table.remove(ST.fx,i)
+		elseif f.kind=="spark" then
+			f.v=f.v-Vector3.new(0,45*dt,0)
+			local np=f.p.Position+f.v*dt
+			f.p.CFrame=CFrame.lookAt(np,np+f.v)
+			f.p.Transparency=a
+		else
+			local sz=(2+16*a)*f.s
+			f.p.Size=Vector3.new(sz,sz,sz)
+			f.p.Transparency=0.2+0.8*a
+		end
+	end
+	for _,w in ipairs(ST.wx) do
+		local q=w.p.Position+w.v*dt
+		if q.Y>70 then q=Vector3.new(q.X,0,q.Z) elseif q.Y<0 then q=Vector3.new(q.X,70,q.Z) end
+		if q.X>90 then q=Vector3.new(-90,q.Y,q.Z) elseif q.X<-90 then q=Vector3.new(90,q.Y,q.Z) end
+		if q.Z>90 then q=Vector3.new(q.X,q.Y,-90) elseif q.Z<-90 then q=Vector3.new(q.X,q.Y,90) end
+		w.p.Position=q
+	end
+	local k=math.max(A.s,B.s)
+	local cA,cB=A.torso.Position,B.torso.Position
+	local c=(cA+cB)/2
+	local idx=math.floor(T/3.4)
+	local shot=sc.shots[idx%#sc.shots+1]
+	local lt=T-idx*3.4
+	local pos,tgt,fov=c,c,60
+	if shot==1 then
+		local ang=T*0.22
+		pos=c+Vector3.new(math.cos(ang)*30*k,8*k,math.sin(ang)*30*k) tgt=c
+	elseif shot==2 then
+		pos=Vector3.new(cA.X-4*k,2.5*k,(16-lt*1.2)*k) tgt=c+Vector3.new(0,3*k,0) fov=65
+	elseif shot==3 then
+		pos=Vector3.new(c.X-12*k+lt*4*k,5*k,-26*k) tgt=c
+	elseif shot==4 then
+		pos=cA+Vector3.new(-13*k,7*k,5*k) tgt=cB+Vector3.new(0,2*k,0) fov=55
+	elseif shot==5 then
+		pos=c+Vector3.new(math.sin(T*0.2)*10*k,(30-lt*2)*k,18*k) tgt=c
+	else
+		pos=c+Vector3.new(math.sin(T)*2*k,4*k,14*k) tgt=c+Vector3.new(0,3*k,0) fov=38
+	end
+	local sh=ST.shake
+	local o=Vector3.new(math.random()-0.5,math.random()-0.5,math.random()-0.5)*sh*k*1.2
+	cam.FieldOfView=fov
+	cam.CFrame=CFrame.lookAt(pos+o,tgt+o)
+	ST.shake=math.max(0,sh-dt*3)
+end
+
+local function applyScene()
+	clearScene()
+	local sc=SC[HW.Scene]
+	if not sc then
+		HW.ringK=1
+		TS:Create(center,TweenInfo.new(0.5),{Position=UDim2.new(0.5,0,0.5,0)}):Play()
+		title.Text=""
+		return
+	end
+	buildEnv(sc)
+	ST.sc=sc ST.T=0 ST.hitN=-1 ST.lastHit=-9 ST.lastDef=nil ST.shake=0
+	ST.A=newMech(sc.A[1],sc.A[2],sc.A[3],sc.A[4])
+	ST.B=newMech(sc.B[1],sc.B[2],sc.B[3],sc.B[4])
+	vf.Visible=true
+	HW.ringK=0.5
+	TS:Create(center,TweenInfo.new(0.5),{Position=UDim2.new(0.5,0,0.22,0)}):Play()
+	title.Text=string.format("ซีน %d/%d  %s",HW.Scene,#SC,sc.n)
+end
+
+HW.clearScene=clearScene
+HW.applyScene=applyScene
+HW.stepScene=stepScene-- NEXORA Halloween AFK | พาร์ท 4/5: เคาะประตู + ฟาร์ม + กันหลุด
+local env=(getgenv and getgenv()) or _G
+local HW=env.NX_HW
+if not HW or not HW.applyScene then warn("รันพาร์ท 1-3 ก่อน") return end
+local RS=game:GetService("RunService")
+local VU=game:GetService("VirtualUser")
+local lp=game:GetService("Players").LocalPlayer
+local CFG=HW.CFG
+
+local function root()
+	local ch=lp.Character
+	return ch and ch:FindFirstChild("HumanoidRootPart")
+end
+
+HW.StepConn=RS.Stepped:Connect(function()
+	if not HW.Active then return end
+	local ch=lp.Character
+	if not ch then return end
+	for _,p in ipairs(ch:GetDescendants()) do
+		if p:IsA("BasePart") then p.CanCollide=false end
+	end
+	local h=ch:FindFirstChildOfClass("Humanoid")
+	if h and h.Health>0 and h.Health<h.MaxHealth then h.Health=h.MaxHealth end
+end)
+
+local function floatTo(pos,speed,abort)
+	while HW.Active do
+		local r=root()
+		if not r then task.wait(0.3) continue end
+		local d=pos-r.Position
+		local m=d.Magnitude
+		if m<3 then return true end
+		local dt=RS.Heartbeat:Wait()
+		r.CFrame=r.CFrame+d.Unit*math.min(speed*dt,m)
+		r.AssemblyLinearVelocity=Vector3.zero
+		if abort and abort() then return false end
+	end
+	return false
+end
+
+local function nameHas(o,l)
+	local n=o:GetFullName():lower()
+	for _,k in ipairs(l) do
+		if n:find(k,1,true) then return true end
+	end
+	return false
+end
+
+local function scan()
+	if tick()-(HW.lastScan or 0)<5 then return end
+	HW.lastScan=tick()
+	local old={}
+	for _,h in ipairs(HW.Houses or {}) do old[h.door]=h end
+	local out={}
+	for _,d in ipairs(workspace:GetDescendants()) do
+		if d:IsA("BasePart") and nameHas(d,CFG.Keywords) and not nameHas(d,CFG.Exclude)
+			and (d.Name:lower():find("door") or d:FindFirstChildOfClass("TouchTransmitter")) then
+			local h=old[d] or {door=d,last=-1e9}
+			h.pos=d.Position
+			table.insert(out,h)
+		end
+	end
+	HW.Houses=out
+end
+
+local function nextReady()
+	local r=root()
+	local best,bd
+	for _,h in ipairs(HW.Houses or {}) do
+		if h.door.Parent and tick()-h.last>=CFG.KnockCooldown then
+			local d=r and (h.pos-r.Position).Magnitude or 0
+			if not bd or d<bd then best,bd=h,d end
+		end
+	end
+	return best
+end
+
+local function standPos(h,from)
+	local d=h.door
+	local cf,sz=d.CFrame,d.Size
+	local axis,thick
+	if sz.X<sz.Z then axis=cf.RightVector thick=sz.X else axis=cf.LookVector thick=sz.Z end
+	axis=Vector3.new(axis.X,0,axis.Z)
+	if axis.Magnitude<0.1 then axis=Vector3.new(0,0,1) end
+	axis=axis.Unit
+	local toMe=Vector3.new(from.X-h.pos.X,0,from.Z-h.pos.Z)
+	if toMe:Dot(axis)<0 then axis=-axis end
+	local p=h.pos+axis*(thick/2+CFG.Gap)
+	return Vector3.new(p.X,d.Position.Y-sz.Y/2+3,p.Z)
+end
+
+local function knock(h)
+	local r=root()
+	if not r then return end
+	if not floatTo(standPos(h,r.Position),CFG.HouseSpeed) then return end
+	h.last=tick()
+	r=root()
+	if not r then return end
+	local cf0,tr0=h.door.CFrame,h.door.Transparency
+	if firetouchinterest then
+		pcall(function()
+			firetouchinterest(r,h.door,0)
+			task.wait(0.1)
+			firetouchinterest(r,h.door,1)
+		end)
+	end
+	local t0=tick()
+	while HW.Active and tick()-t0<CFG.OpenTimeout do
+		if h.door.CFrame~=cf0 or h.door.Transparency~=tr0 then break end
+		task.wait(0.05)
+	end
+	r=root()
+	if r then floatTo(r.Position-Vector3.new(0,CFG.SinkDown,0),80) end
+	task.wait(CFG.AfterWait)
+end
+
+local function stagePoints()
+	local pts={}
+	local bs=workspace:FindFirstChild("BoatStages")
+	local ns=bs and bs:FindFirstChild("NormalStages")
+	if not ns then return pts end
+	local arr={}
+	for _,s in ipairs(ns:GetChildren()) do
+		local n=tonumber(s.Name:match("%d+"))
+		if n and s.Name:find("CaveStage") then table.insert(arr,{n,s}) end
+	end
+	table.sort(arr,function(a,b) return a[1]<b[1] end)
+	for _,v in ipairs(arr) do
+		local p=v[2]:FindFirstChild("DarknessPart") or v[2]:FindFirstChildWhichIsA("BasePart",true)
+		if p then table.insert(pts,p.Position+Vector3.new(0,5,0)) end
+	end
+	local e=ns:FindFirstChild("TheEnd")
+	local c2=e and e:FindFirstChild("GoldenChest")
+	local tr=c2 and (c2:FindFirstChild("Trigger") or c2:FindFirstChildWhichIsA("BasePart",true))
+	if tr then table.insert(pts,tr.Position) end
+	return pts
+end
+
+local runId=0
+local function main(id)
+	local idx=1
+	while HW.Active and runId==id do
+		scan()
+		local h=nextReady()
+		if h then
+			HW.Status="เคาะประตูบ้าน (พบ "..#HW.Houses.." หลัง)"
+			knock(h)
+		else
+			local pts=stagePoints()
+			if #pts==0 then
+				HW.Status="รอคูลดาวน์... (ไม่เจอด่านให้ฟาร์ม)"
+				task.wait(1)
+			else
+				if idx>#pts then idx=1 end
+				HW.Status="ฟาร์มด่าน "..idx.."/"..#pts.." | บ้าน "..#(HW.Houses or {}).." หลัง"
+				local done=floatTo(pts[idx],CFG.FarmSpeed,function()
+					return runId~=id or nextReady()~=nil
+				end)
+				if done then
+					idx+=1
+					if idx>#pts then
+						HW.Status="ถึงกล่องแล้ว รอเกิดใหม่..."
+						task.wait(4)
+						idx=1
+					end
+				end
+			end
+		end
+		task.wait()
+	end
+end
+
+HW.startMain=function()
+	runId+=1
+	HW.Status="เริ่มทำงาน..."
+	task.spawn(main,runId)
+end
+HW.stopMain=function()
+	runId+=1
+	HW.Status="หยุดแล้ว"
+end
+
+-- กันหลุด
+HW.IdleConn=lp.Idled:Connect(function()
+	pcall(function()
+		VU:CaptureController()
+		VU:ClickButton2(Vector2.new(0,0))
+	end)
+end)
+task.spawn(function()
+	while env.NX_HW==HW do
+		task.wait(40)
+		if HW.Active then
+			pcall(function()
+				local cf=workspace.CurrentCamera.CFrame
+				VU:CaptureController()
+				VU:Button2Down(Vector2.new(0,0),cf)
+				task.wait(0.1)
+				VU:Button2Up(Vector2.new(0,0),cf)
+			end)
+		end
+	end
+end)-- NEXORA Halloween AFK | พาร์ท 5/5: ปุ่ม + ลูปเอฟเฟค
+local env=(getgenv and getgenv()) or _G
+local HW=env.NX_HW
+if not HW or not HW.startMain then warn("รันพาร์ท 1-4 ก่อน") return end
+local RS=game:GetService("RunService")
+local TS=game:GetService("TweenService")
+local C,corner,mk=HW.U.C,HW.U.corner,HW.U.mk
+local UI=HW.UI
+local ov,btn,stop,sceneBtn,panel,list=UI.ov,UI.btn,UI.stop,UI.sceneBtn,UI.panel,UI.list
+local rings,t,ts,tg,stat=UI.rings,UI.t,UI.ts,UI.tg,UI.stat
+local SC=HW.SC
+
+local function setOn(on)
+	HW.Active=on
+	if on then
+		ov.Visible=true btn.Visible=false
+		TS:Create(ov,TweenInfo.new(0.6),{BackgroundTransparency=0.15}):Play()
+		HW.applyScene()
+		HW.startMain()
+	else
+		HW.stopMain()
+		HW.clearScene()
+		panel.Visible=false
+		TS:Create(ov,TweenInfo.new(0.4),{BackgroundTransparency=1}):Play()
+		task.delay(0.4,function()
+			if not HW.Active then ov.Visible=false btn.Visible=true end
+		end)
+	end
+end
+
+local function addItem(i,label,sub)
+	local b=mk("TextButton",{Size=UDim2.new(1,-6,0,44),BackgroundColor3=C(34,18,52),
+		Text=label.."\n"..sub,TextColor3=C(255,255,255),Font=Enum.Font.GothamBold,
+		TextSize=12,LayoutOrder=i,ZIndex=22},list)
+	corner(b,10)
+	b.MouseButton1Click:Connect(function()
+		HW.Scene=i
+		panel.Visible=false
+		if HW.Active then HW.applyScene() end
+	end)
+end
+addItem(0,"⛔ ปิดซีน","โชว์แค่เอฟเฟค AFK (ประหยัดแบต/เครื่อง)")
+for i,sc in ipairs(SC) do addItem(i,i..". "..sc.n,sc.d) end
+
+btn.MouseButton1Click:Connect(function() setOn(true) end)
+stop.MouseButton1Click:Connect(function() setOn(false) end)
+sceneBtn.MouseButton1Click:Connect(function() panel.Visible=not panel.Visible end)
+
+local acc,tm=0,0
+HW.RenderConn=RS.RenderStepped:Connect(function(dt)
+	if not ov.Visible then return end
+	tm+=dt acc+=dt
+	local k=HW.ringK
+	for _,r in ipairs(rings) do
+		r.g.Rotation=(r.g.Rotation+dt*90*r.d)%360
+		local sz=r.base*k*(1+math.sin(tm*2+r.d)*0.04)
+		r.f.Size=UDim2.new(0,sz,0,sz)
+	end
+	tg.Rotation=(tg.Rotation+dt*120)%360
+	t.TextSize=math.floor(90*k*(1+math.sin(tm*4)*0.08))
+	ts.Color=Color3.fromHSV(0.07+math.sin(tm*3)*0.05,1,1)
+	if acc>0.2 then acc=0 HW.spawnP() end
+	stat.Text=tostring(HW.Status or "")
+	HW.stepScene(dt)
+end)
